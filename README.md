@@ -1,0 +1,1 @@
+add $SHADERC_LIB_DIR to environment variables
