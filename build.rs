@@ -3,7 +3,7 @@ use std::{
     fs::{create_dir, read_dir, remove_file, File, OpenOptions},
     io::{ErrorKind, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    process::{exit, Command},
+    process::Command,
 };
 
 #[cfg(target_os = "windows")]
@@ -13,15 +13,16 @@ const GLSLANG_VALIDATOR: &'static str = "glslangValidator.exe";
 const GLSLANG_VALIDATOR: &'static str = "glslangValidator";
 
 fn main() {
-    match build() {
-        Ok(()) => {}
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    }
+    //match build() {
+    //    Ok(()) => {}
+    //    Err(e) => {
+    //        eprintln!("{}", e);
+    //        std::process::exit(1);
+    //    }
+    //}
 }
 
+#[allow(dead_code)]
 fn build() -> Result<(), String> {
     // find glslangValidator
     let glslang_validator = find_executable(GLSLANG_VALIDATOR)
