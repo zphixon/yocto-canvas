@@ -3,13 +3,12 @@ name = "yocto-canvas"
 version = "0.1.0"
 authors = ["Zack <zphixon@gmail.com>"]
 edition = "2018"
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-#wgpu = "0.7.1"
-#wgpu = { git = 'https://github.com/gfx-rs/wgpu-rs', branch = 'master' }
-wgpu = { path = '../wgpu-rs' }
 winit = "0.24.0"
-pollster = "0.2.2"
 env_logger = "0.8.3"
+log = "0.4.14"
+pixels = "0.2.0"
