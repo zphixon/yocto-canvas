@@ -1,1 +1,1 @@
-add $SHADERC_LIB_DIR to environment variables
+https://photoblogstop.com/photoshop/photoshop-blend-modes-explained
