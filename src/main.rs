@@ -7,10 +7,13 @@ use winit::{
 
 // i don't want to type 'wgpu' a thousand times thank you very much
 use wgpu::{
-    BackendBit, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, Instance,
-    Limits, LoadOp, Operations, PowerPreference, PresentMode, Queue,
-    RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RequestAdapterOptions, Surface,
-    SwapChain, SwapChainDescriptor, SwapChainError, TextureUsage,
+    BackendBit, BlendState, Color, ColorTargetState, ColorWrite, CommandEncoderDescriptor,
+    CullMode, Device, DeviceDescriptor, Features, FragmentState, FrontFace, Instance, Limits,
+    LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PolygonMode, PowerPreference,
+    PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
+    ShaderFlags, ShaderModuleDescriptor, Surface, SwapChain, SwapChainDescriptor, SwapChainError,
+    TextureUsage, VertexState,
 };
 
 struct State {
@@ -20,7 +23,7 @@ struct State {
     sc_desc: SwapChainDescriptor,
     swapchain: SwapChain,
     size: PhysicalSize<u32>,
-    clear_color: Color,
+    render_pipeline: RenderPipeline,
 }
 
 impl State {
@@ -62,12 +65,59 @@ impl State {
 
         let swapchain = device.create_swap_chain(&surface, &sc_desc);
 
-        let clear_color = Color {
-            r: 0.1,
-            g: 0.2,
-            b: 0.3,
-            a: 1.0,
-        };
+        let vs_data = wgpu::util::make_spirv(include_bytes!("../shaders/shader.vert.spv"));
+        let fs_data = wgpu::util::make_spirv(include_bytes!("../shaders/shader.frag.spv"));
+
+        let vs_module = device.create_shader_module(&ShaderModuleDescriptor {
+            label: Some("vertex"),
+            source: vs_data,
+            flags: ShaderFlags::default(),
+        });
+
+        let fs_module = device.create_shader_module(&ShaderModuleDescriptor {
+            label: Some("vertex"),
+            source: fs_data,
+            flags: ShaderFlags::default(),
+        });
+
+        let pipe_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("pipe layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("pipe"),
+            layout: Some(&pipe_layout),
+            vertex: VertexState {
+                module: &vs_module,
+                entry_point: "main",
+                buffers: &[],
+            },
+            fragment: Some(FragmentState {
+                module: &fs_module,
+                entry_point: "main",
+                targets: &[ColorTargetState {
+                    format: sc_desc.format,
+                    alpha_blend: BlendState::REPLACE,
+                    color_blend: BlendState::REPLACE,
+                    write_mask: ColorWrite::ALL,
+                }],
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: FrontFace::Ccw,
+                cull_mode: CullMode::Back,
+                polygon_mode: PolygonMode::Fill,
+            },
+            depth_stencil: None,
+            multisample: MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+        });
 
         Self {
             surface,
@@ -76,7 +126,7 @@ impl State {
             sc_desc,
             swapchain,
             size,
-            clear_color,
+            render_pipeline,
         }
     }
 
@@ -89,11 +139,6 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::CursorMoved { position, .. } => {
-                self.clear_color.r = position.x / self.size.width as f64;
-                self.clear_color.b = position.y / self.size.height as f64;
-                true
-            }
             _ => false,
         }
     }
@@ -109,18 +154,26 @@ impl State {
             });
 
         {
-            let _rp = encoder.begin_render_pass(&RenderPassDescriptor {
+            let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("state render pass"),
                 color_attachments: &[RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
                     ops: Operations {
-                        load: LoadOp::Clear(self.clear_color),
+                        load: LoadOp::Clear(Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
                         store: true,
                     },
                 }],
                 depth_stencil_attachment: None,
             });
+
+            rp.set_pipeline(&self.render_pipeline);
+            rp.draw(0..3, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

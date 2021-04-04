@@ -1,7 +1,7 @@
 use std::{
     env,
-    fs::{create_dir, read_dir, remove_file, File, OpenOptions},
-    io::{ErrorKind, Read, Seek, SeekFrom, Write},
+    fs::{read_dir, remove_file},
+    io::ErrorKind,
     path::{Path, PathBuf},
     process::Command,
 };
