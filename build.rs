@@ -13,6 +13,7 @@ const GLSLANG_VALIDATOR: &'static str = "glslangValidator.exe";
 const GLSLANG_VALIDATOR: &'static str = "glslangValidator";
 
 fn main() {
+    println!(":)");
     //match build() {
     //    Ok(()) => {}
     //    Err(e) => {

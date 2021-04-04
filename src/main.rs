@@ -1,154 +1,178 @@
-use std::borrow::Cow;
 use winit::{
-    event::{Event, WindowEvent},
+    dpi::PhysicalSize,
+    event::*,
     event_loop::{ControlFlow, EventLoop},
-    window::Window,
+    window::{Window, WindowBuilder},
 };
 
-async fn run(event_loop: EventLoop<()>, window: Window) {
-    let size = window.inner_size();
-    let instance = wgpu::Instance::new(wgpu::BackendBit::all());
-    let surface = unsafe { instance.create_surface(&window) };
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            compatible_surface: Some(&surface),
-        })
-        .await
-        .expect("Failed to find an appropriate adapter");
+// i don't want to type 'wgpu' a thousand times thank you very much
+use wgpu::{
+    BackendBit, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Features, Instance,
+    Limits, LoadOp, Operations, PowerPreference, PresentMode, Queue,
+    RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RequestAdapterOptions, Surface,
+    SwapChain, SwapChainDescriptor, SwapChainError, TextureUsage,
+};
 
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("device descriptor"),
-                features: wgpu::Features::empty(),
-                limits: wgpu::Limits::default(),
-            },
-            None,
-        )
-        .await
-        .expect("Failed to create device");
+struct State {
+    surface: Surface,
+    device: Device,
+    queue: Queue,
+    sc_desc: SwapChainDescriptor,
+    swapchain: SwapChain,
+    size: PhysicalSize<u32>,
+    clear_color: Color,
+}
 
-    let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-        label: Some("shader module descriptor"),
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../shaders/shader.wgsl"))),
-        flags: wgpu::ShaderFlags::all(),
-    });
+impl State {
+    async fn new(window: &Window) -> Self {
+        let size = window.inner_size();
+        let instance = Instance::new(BackendBit::PRIMARY);
+        let surface = unsafe { instance.create_surface(window) };
+        let adapter = instance
+            .request_adapter(&RequestAdapterOptions {
+                power_preference: PowerPreference::default(),
+                compatible_surface: Some(&surface),
+            })
+            .await
+            .unwrap();
+        let (device, queue) = adapter
+            .request_device(
+                &DeviceDescriptor {
+                    label: None,
+                    features: Features::empty(),
+                    limits: Limits::default(),
+                },
+                None,
+            )
+            .await
+            .unwrap();
 
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("pipeline layout"),
-        bind_group_layouts: &[],
-        push_constant_ranges: &[],
-    });
+        println!("adapter supports");
+        println!("{:?}", adapter.features());
+        println!("device supports");
+        println!("{:?}", device.features());
 
-    let swapchain_format = adapter.get_swap_chain_preferred_format(&surface).unwrap();
+        let sc_desc = SwapChainDescriptor {
+            usage: TextureUsage::RENDER_ATTACHMENT,
+            format: adapter.get_swap_chain_preferred_format(&surface),
+            width: size.width,
+            height: size.height,
+            present_mode: PresentMode::Fifo,
+        };
 
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("render pipeline"),
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: "vs_main",
-            buffers: &[],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: "fs_main",
-            targets: &[swapchain_format.into()],
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-    });
+        let swapchain = device.create_swap_chain(&surface, &sc_desc);
 
-    let mut sc_desc = wgpu::SwapChainDescriptor {
-        usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-        format: swapchain_format,
-        width: size.width,
-        height: size.height,
-        present_mode: wgpu::PresentMode::Mailbox,
-    };
+        let clear_color = Color {
+            r: 0.1,
+            g: 0.2,
+            b: 0.3,
+            a: 1.0,
+        };
 
-    let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
-
-    event_loop.run(move |event, _, control_flow| {
-        let _ = (&instance, &adapter, &shader, &pipeline_layout);
-
-        *control_flow = ControlFlow::Wait;
-        match event {
-            Event::WindowEvent {
-                event: WindowEvent::Touch(touch),
-                window_id,
-            } => {
-                println!("{:?}: {:?}", window_id, touch);
-            }
-            Event::WindowEvent {
-                event: WindowEvent::Resized(size),
-                ..
-            } => {
-                sc_desc.width = size.width;
-                sc_desc.height = size.height;
-                swap_chain = device.create_swap_chain(&surface, &sc_desc);
-            }
-            Event::RedrawRequested(_) => {
-                let frame = swap_chain
-                    .get_current_frame()
-                    .expect("Failed to acquire next swap chain texture")
-                    .output;
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("command encoder"),
-                });
-                {
-                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("render pass"),
-                        color_attachments: &[wgpu::RenderPassColorAttachment {
-                            view: &frame.view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                                store: true,
-                            },
-                        }],
-                        depth_stencil_attachment: None,
-                    });
-                    rpass.set_pipeline(&render_pipeline);
-                    rpass.draw(0..3, 0..1);
-                }
-
-                queue.submit(Some(encoder.finish()));
-            }
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => *control_flow = ControlFlow::Exit,
-            _ => {}
+        Self {
+            surface,
+            device,
+            queue,
+            sc_desc,
+            swapchain,
+            size,
+            clear_color,
         }
-    });
+    }
+
+    fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        self.size = new_size;
+        self.sc_desc.width = new_size.width;
+        self.sc_desc.height = new_size.height;
+        self.swapchain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
+    }
+
+    fn input(&mut self, event: &WindowEvent) -> bool {
+        match event {
+            WindowEvent::CursorMoved { position, .. } => {
+                self.clear_color.r = position.x / self.size.width as f64;
+                self.clear_color.b = position.y / self.size.height as f64;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn update(&mut self) {}
+
+    fn render(&mut self) -> Result<(), SwapChainError> {
+        let frame = self.swapchain.get_current_frame()?.output;
+        let mut encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("state encoder"),
+            });
+
+        {
+            let _rp = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("state render pass"),
+                color_attachments: &[RenderPassColorAttachmentDescriptor {
+                    attachment: &frame.view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(self.clear_color),
+                        store: true,
+                    },
+                }],
+                depth_stencil_attachment: None,
+            });
+        }
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        Ok(())
+    }
 }
 
 fn main() {
+    env_logger::init();
     let event_loop = EventLoop::new();
-    let window = winit::window::Window::new(&event_loop).unwrap();
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        env_logger::init();
-        // Temporarily avoid srgb formats for the swapchain on the web
-        pollster::block_on(run(event_loop, window));
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-        console_log::init().expect("could not initialize logger");
-        use winit::platform::web::WindowExtWebSys;
-        // On wasm, append the canvas to the document body
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| doc.body())
-            .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
-                    .ok()
-            })
-            .expect("couldn't append canvas to document body");
-        wasm_bindgen_futures::spawn_local(run(event_loop, window));
-    }
+    let window = WindowBuilder::new().build(&event_loop).unwrap();
+
+    let mut state = futures::executor::block_on(State::new(&window));
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
+        match event {
+            Event::WindowEvent {
+                ref event,
+                window_id,
+            } if window_id == window.id() && !state.input(event) => match event {
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::KeyboardInput { input, .. } => match input {
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        ..
+                    } => *control_flow = ControlFlow::Exit,
+                    _ => {}
+                },
+                WindowEvent::Resized(size) => {
+                    state.resize(*size);
+                }
+                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    state.resize(**new_inner_size);
+                }
+                _ => {}
+            },
+            Event::RedrawRequested(_) => {
+                state.update();
+                match state.render() {
+                    Ok(_) => {}
+                    Err(SwapChainError::Lost) => state.resize(state.size),
+                    Err(SwapChainError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                    Err(e) => eprintln!("{:?}", e),
+                }
+            }
+            Event::MainEventsCleared => {
+                window.request_redraw();
+            }
+            _ => {}
+        }
+    });
 }

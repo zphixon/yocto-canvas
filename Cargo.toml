@@ -8,8 +8,16 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wgpu = { path = "../wgpu-rs" }
-winit = "0.24.0"
+#wgpu = { path = "../wgpu-rs" }
+#winit = "0.24.0"
 env_logger = "0.8.3"
 log = "0.4.14"
-pollster = "*"
+#pollster = "*"
+
+cgmath = "0.17"
+futures = "0.3"
+winit = "0.22"
+[dependencies.wgpu]
+version = "0.7"
+features = ["vulkan-portability"]
+
