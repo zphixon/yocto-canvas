@@ -13,14 +13,13 @@ const GLSLANG_VALIDATOR: &'static str = "glslangValidator.exe";
 const GLSLANG_VALIDATOR: &'static str = "glslangValidator";
 
 fn main() {
-    println!(":)");
-    //match build() {
-    //    Ok(()) => {}
-    //    Err(e) => {
-    //        eprintln!("{}", e);
-    //        std::process::exit(1);
-    //    }
-    //}
+    match build() {
+        Ok(()) => {}
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -31,13 +30,13 @@ fn build() -> Result<(), String> {
 
     // get shaders dir and cache
     let shaders_dir = PathBuf::from("shaders");
-    let mut cache_dir = shaders_dir.clone();
-    cache_dir.push("cache");
-    if let Err(e) = create_dir(&cache_dir) {
-        if e.kind() != ErrorKind::AlreadyExists {
-            return Err(format!("Could not create cache dir: {}", e));
-        }
-    }
+    //let mut cache_dir = shaders_dir.clone();
+    //cache_dir.push("cache");
+    //if let Err(e) = create_dir(&cache_dir) {
+    //    if e.kind() != ErrorKind::AlreadyExists {
+    //        return Err(format!("Could not create cache dir: {}", e));
+    //    }
+    //}
 
     let mut output = std::collections::HashSet::new();
 
@@ -61,6 +60,7 @@ fn build() -> Result<(), String> {
             }
         }
 
+        /*
         // error out if we already compiled to that name
         if output.contains(&shader_out) {
             return Err(format!(
@@ -125,6 +125,7 @@ fn build() -> Result<(), String> {
             return Err(format!("Could not find or create {}", cache_dir.display()));
         }
         cache_dir.pop();
+         */
 
         // at this point we only have unchanged and unique files left to compile, so remove those spv files
         if let Err(e) = remove_file(&shader_out) {
@@ -155,7 +156,7 @@ fn build() -> Result<(), String> {
         if let Ok(out) = out {
             if !out.status.success() {
                 return Err(format!(
-                    "Could not compile {}\nstderr: {}\nstdout: {}",
+                    "Could not compile {}\nCompiler said: (stderr) {}\n(stdout) {}",
                     shader_out.display(),
                     String::from_utf8_lossy(&out.stderr),
                     String::from_utf8_lossy(&out.stdout)
@@ -163,7 +164,8 @@ fn build() -> Result<(), String> {
             }
         } else {
             return Err(format!(
-                "Could not run compiler for {}\n{}",
+                "Could not run compiler for {} -> {}\n{}",
+                shader_in.display(),
                 shader_out.display(),
                 out.unwrap_err()
             ));
