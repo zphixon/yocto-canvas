@@ -70,7 +70,6 @@ const VERTICES: &[Vertex] = &[
 ];
 
 const INDICES_PENTAGON: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
-const INDICES_SCISSOR_BLADES: &[u16] = &[0, 1, 4, 4, 2, 3];
 
 struct State {
     surface: Surface,
@@ -83,9 +82,6 @@ struct State {
     vertex_buffer: Buffer,
     index_buffer_pentagon: Buffer,
     num_indices_pentagon: u32,
-    index_buffer_scissor_blades: Buffer,
-    num_indices_scissor_blades: u32,
-    drawing_pentagon: bool,
 }
 
 impl State {
@@ -185,16 +181,6 @@ impl State {
 
         let num_indices_pentagon = INDICES_PENTAGON.len() as u32;
 
-        let index_buffer_scissor_blades = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("scissor blades index buffer"),
-            contents: bytemuck::cast_slice(INDICES_SCISSOR_BLADES),
-            usage: BufferUsage::INDEX,
-        });
-
-        let num_indices_scissor_blades = INDICES_SCISSOR_BLADES.len() as u32;
-
-        let drawing_pentagon = true;
-
         Self {
             surface,
             device,
@@ -206,9 +192,6 @@ impl State {
             vertex_buffer,
             index_buffer_pentagon,
             num_indices_pentagon,
-            index_buffer_scissor_blades,
-            num_indices_scissor_blades,
-            drawing_pentagon,
         }
     }
 
@@ -221,18 +204,6 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Space),
-                        ..
-                    },
-                ..
-            } => {
-                self.drawing_pentagon = !self.drawing_pentagon;
-                true
-            }
             _ => false,
         }
     }
@@ -269,16 +240,8 @@ impl State {
             rp.set_pipeline(&self.render_pipeline);
             rp.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
-            if self.drawing_pentagon {
-                rp.set_index_buffer(self.index_buffer_pentagon.slice(..), IndexFormat::Uint16);
-                rp.draw_indexed(0..self.num_indices_pentagon, 0, 0..1);
-            } else {
-                rp.set_index_buffer(
-                    self.index_buffer_scissor_blades.slice(..),
-                    IndexFormat::Uint16,
-                );
-                rp.draw_indexed(0..self.num_indices_scissor_blades, 0, 0..1);
-            }
+            rp.set_index_buffer(self.index_buffer_pentagon.slice(..), IndexFormat::Uint16);
+            rp.draw_indexed(0..self.num_indices_pentagon, 0, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
