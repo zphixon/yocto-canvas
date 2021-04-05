@@ -1,6 +1,6 @@
 pub use anyhow::Result;
 
-use cgmath::{Deg, Matrix4, Point3, Vector3};
+use cgmath::{Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Zero};
 
 use winit::{
     dpi::PhysicalSize,
@@ -26,6 +26,65 @@ use wgpu::{
 
 mod camera;
 mod texture;
+
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
+const INSTANCE_DISPLACEMENT: Vector3<f32> = Vector3::new(
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+    0.0,
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+);
+
+struct MyInstance {
+    position: Vector3<f32>,
+    rotation: Quaternion<f32>,
+}
+
+impl MyInstance {
+    fn to_raw(&self) -> InstanceRawXd {
+        InstanceRawXd {
+            model: (Matrix4::from_translation(self.position) * Matrix4::from(self.rotation)).into(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(C)]
+struct InstanceRawXd {
+    model: [[f32; 4]; 4],
+}
+
+impl InstanceRawXd {
+    fn desc<'a>() -> VertexBufferLayout<'a> {
+        use std::mem::size_of;
+        VertexBufferLayout {
+            array_stride: size_of::<InstanceRawXd>() as BufferAddress,
+            step_mode: InputStepMode::Instance,
+            attributes: &[
+                VertexAttribute {
+                    offset: 0,
+                    shader_location: 5,
+                    format: VertexFormat::Float4,
+                },
+                VertexAttribute {
+                    offset: size_of::<[f32; 4]>() as BufferAddress,
+                    shader_location: 6,
+                    format: VertexFormat::Float4,
+                },
+                VertexAttribute {
+                    offset: size_of::<[f32; 8]>() as BufferAddress,
+                    shader_location: 7,
+                    format: VertexFormat::Float4,
+                },
+                VertexAttribute {
+                    offset: size_of::<[f32; 12]>() as BufferAddress,
+                    shader_location: 8,
+                    format: VertexFormat::Float4,
+                },
+            ],
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -117,6 +176,8 @@ struct State {
     uniforms: Uniforms,
     uniform_buffer: Buffer,
     uniform_bind_group: BindGroup,
+    instances: Vec<MyInstance>,
+    instance_buffer: Buffer,
 }
 
 impl State {
@@ -203,6 +264,28 @@ impl State {
             ],
         });
 
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(move |z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = Vector3::new(x as f32, 0.0, z as f32) - INSTANCE_DISPLACEMENT;
+                    let rotation = if position.is_zero() {
+                        Quaternion::from_axis_angle(Vector3::unit_z(), Deg(0.0))
+                    } else {
+                        Quaternion::from_axis_angle(position.clone().normalize(), Deg(45.0))
+                    };
+
+                    MyInstance { position, rotation }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let instance_data = instances.iter().map(MyInstance::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("instance buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: BufferUsage::VERTEX,
+        });
+
         let camera_controller = camera::CameraController::new(0.2);
 
         let camera = camera::Camera {
@@ -265,7 +348,7 @@ impl State {
             vertex: VertexState {
                 module: &vs_module,
                 entry_point: "main",
-                buffers: &[Vertex::desc()],
+                buffers: &[Vertex::desc(), InstanceRawXd::desc()],
             },
             fragment: Some(FragmentState {
                 module: &fs_module,
@@ -324,6 +407,8 @@ impl State {
             uniforms,
             uniform_buffer,
             uniform_bind_group,
+            instances,
+            instance_buffer,
         }
     }
 
@@ -381,9 +466,14 @@ impl State {
             rp.set_bind_group(1, &self.uniform_bind_group, &[]);
 
             rp.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            rp.set_vertex_buffer(1, self.instance_buffer.slice(..));
             rp.set_index_buffer(self.index_buffer_pentagon.slice(..), IndexFormat::Uint16);
 
-            rp.draw_indexed(0..self.num_indices_pentagon, 0, 0..1);
+            rp.draw_indexed(
+                0..self.num_indices_pentagon,
+                0,
+                0..self.instances.len() as _,
+            );
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
