@@ -1,3 +1,6 @@
-/target
-shaders/cache
+target/
+shaders/
+res/
 **/*.spv
+**/*.png
+**/*.jpg
