@@ -1,5 +1,4 @@
 target/
-shaders/
 res/
 **/*.spv
 **/*.png
