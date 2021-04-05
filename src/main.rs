@@ -15,13 +15,14 @@ use wgpu::{
     BackendBit, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BlendState, Buffer, BufferAddress,
     BufferBindingType, BufferUsage, Color, ColorTargetState, ColorWrite, CommandEncoderDescriptor,
-    CullMode, Device, DeviceDescriptor, Features, FragmentState, FrontFace, IndexFormat,
-    InputStepMode, Instance, Limits, LoadOp, MultisampleState, Operations,
-    PipelineLayoutDescriptor, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
-    PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, ShaderStage, Surface,
-    SwapChain, SwapChainDescriptor, SwapChainError, TextureSampleType, TextureUsage,
-    TextureViewDimension, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
+    CompareFunction, CullMode, DepthBiasState, DepthStencilState, Device, DeviceDescriptor,
+    Features, FragmentState, FrontFace, IndexFormat, InputStepMode, Instance, Limits, LoadOp,
+    MultisampleState, Operations, PipelineLayoutDescriptor, PolygonMode, PowerPreference,
+    PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor,
+    RenderPassDepthStencilAttachmentDescriptor, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, RequestAdapterOptions, ShaderStage, StencilState, Surface, SwapChain,
+    SwapChainDescriptor, SwapChainError, TextureSampleType, TextureUsage, TextureViewDimension,
+    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
 };
 
 mod camera;
@@ -171,6 +172,7 @@ struct State {
     num_indices_pentagon: u32,
     diffuse_bind_group: BindGroup,
     diffuse_texture: texture::MyTexture,
+    depth_texture: texture::MyTexture,
     camera: camera::Camera,
     uniforms: Uniforms,
     uniform_buffer: Buffer,
@@ -218,6 +220,8 @@ impl State {
 
         let swapchain = device.create_swap_chain(&surface, &sc_desc);
 
+        let depth_texture = texture::MyTexture::depth(&device, &sc_desc, "depth texture");
+
         let diffuse_bytes = include_bytes!("../happy-tree.bdff8a19.png");
         let diffuse_texture =
             texture::MyTexture::from_bytes(&device, &queue, diffuse_bytes, "happy tree").unwrap();
@@ -241,7 +245,7 @@ impl State {
                         visibility: ShaderStage::FRAGMENT,
                         ty: BindingType::Sampler {
                             comparison: false,
-                            filtering: true,
+                            filtering: false,
                         },
                         count: None,
                     },
@@ -366,7 +370,14 @@ impl State {
                 cull_mode: CullMode::Back,
                 polygon_mode: PolygonMode::Fill,
             },
-            depth_stencil: None,
+            depth_stencil: Some(DepthStencilState {
+                format: texture::MyTexture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+                clamp_depth: false,
+            }),
             multisample: MultisampleState {
                 count: 1,
                 mask: !0,
@@ -401,6 +412,7 @@ impl State {
             num_indices_pentagon,
             diffuse_bind_group,
             diffuse_texture,
+            depth_texture,
             camera,
             uniforms,
             uniform_buffer,
@@ -415,6 +427,8 @@ impl State {
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
         self.swapchain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
+        self.depth_texture =
+            texture::MyTexture::depth(&self.device, &self.sc_desc, "depth texture resized");
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
@@ -423,7 +437,8 @@ impl State {
 
     fn update(&mut self) {
         self.camera.update();
-        self.uniforms.update_view_proj(self.camera.build_view_proj_matrix());
+        self.uniforms
+            .update_view_proj(self.camera.build_view_proj_matrix());
         self.queue.write_buffer(
             &self.uniform_buffer,
             0,
@@ -455,7 +470,14 @@ impl State {
                         store: true,
                     },
                 }],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachmentDescriptor {
+                    attachment: &self.depth_texture.view,
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
             });
 
             rp.set_pipeline(&self.render_pipeline);
