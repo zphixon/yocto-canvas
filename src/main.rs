@@ -153,8 +153,8 @@ impl Uniforms {
         }
     }
 
-    fn update_view_proj(&mut self, camera: &camera::Camera) {
-        self.view_proj = camera.build_view_proj_matrix().into();
+    fn update_view_proj(&mut self, view_proj: Matrix4<f32>) {
+        self.view_proj = view_proj.into();
     }
 }
 
@@ -172,7 +172,6 @@ struct State {
     diffuse_bind_group: BindGroup,
     diffuse_texture: texture::MyTexture,
     camera: camera::Camera,
-    camera_controller: camera::CameraController,
     uniforms: Uniforms,
     uniform_buffer: Buffer,
     uniform_bind_group: BindGroup,
@@ -286,8 +285,6 @@ impl State {
             usage: BufferUsage::VERTEX,
         });
 
-        let camera_controller = camera::CameraController::new(0.2);
-
         let camera = camera::Camera {
             eye: (0.0, 1.0, 2.0).into(),
             target: (0.0, 0.0, 0.0).into(),
@@ -296,10 +293,12 @@ impl State {
             fov: 45.0,
             z_near: 0.1,
             z_far: 100.0,
+            speed: 0.2,
+            inputs: camera::Inputs::default(),
         };
 
         let mut uniforms = Uniforms::new();
-        uniforms.update_view_proj(&camera);
+        uniforms.update_view_proj(camera.build_view_proj_matrix());
 
         let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("uniform buffer"),
@@ -403,7 +402,6 @@ impl State {
             diffuse_bind_group,
             diffuse_texture,
             camera,
-            camera_controller,
             uniforms,
             uniform_buffer,
             uniform_bind_group,
@@ -420,12 +418,12 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera_controller.process_events(event)
+        self.camera.process_input(event)
     }
 
     fn update(&mut self) {
-        self.camera_controller.update_camera(&mut self.camera);
-        self.uniforms.update_view_proj(&self.camera);
+        self.camera.update();
+        self.uniforms.update_view_proj(self.camera.build_view_proj_matrix());
         self.queue.write_buffer(
             &self.uniform_buffer,
             0,
