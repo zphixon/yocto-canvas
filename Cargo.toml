@@ -14,6 +14,7 @@ cgmath = '0.18.0'
 futures = '0.3.13'
 image = '0.23.14'
 anyhow = '1.0.40'
+tobj = '2.0.4'
 
 [dependencies.wgpu]
 version = '0.7.1'
@@ -23,7 +24,5 @@ features = ['vulkan-portability']
 version = '1.5.1'
 features = ['derive']
 
-#[dependencies.snafu]
-#version = '0.6.10'
-#default-features = false
-#features = ['backtraces', 'futures', 'std']
+[build-dependencies]
+fs_extra = "1.2.0"

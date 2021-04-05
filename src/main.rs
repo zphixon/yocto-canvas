@@ -26,15 +26,13 @@ use wgpu::{
 };
 
 mod camera;
+mod model;
 mod texture;
 
+use crate::model::DrawModel;
+use model::Vertex;
+
 const NUM_INSTANCES_PER_ROW: u32 = 10;
-const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
-const INSTANCE_DISPLACEMENT: Vector3<f32> = Vector3::new(
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
-    0.0,
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
-);
 
 struct MyInstance {
     position: Vector3<f32>,
@@ -88,59 +86,6 @@ impl InstanceRawXd {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    fn desc<'a>() -> VertexBufferLayout<'a> {
-        VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as BufferAddress,
-            step_mode: InputStepMode::Vertex,
-            attributes: &[
-                VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: VertexFormat::Float3,
-                },
-                VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as BufferAddress,
-                    shader_location: 1,
-                    format: VertexFormat::Float2,
-                },
-            ],
-        }
-    }
-}
-
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [-0.0868241, 0.49240386, 0.0],
-        tex_coords: [0.4131759, 0.99240386],
-    }, // A
-    Vertex {
-        position: [-0.49513406, 0.06958647, 0.0],
-        tex_coords: [0.0048659444, 0.56958646],
-    }, // B
-    Vertex {
-        position: [-0.21918549, -0.44939706, 0.0],
-        tex_coords: [0.28081453, 0.050602943],
-    }, // C
-    Vertex {
-        position: [0.35966998, -0.3473291, 0.0],
-        tex_coords: [0.85967, 0.15267089],
-    }, // D
-    Vertex {
-        position: [0.44147372, 0.2347359, 0.0],
-        tex_coords: [0.9414737, 0.7347359],
-    }, // E
-];
-
-const INDICES_PENTAGON: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
-
-#[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
     view_proj: [[f32; 4]; 4],
@@ -167,11 +112,6 @@ struct State {
     swapchain: SwapChain,
     size: PhysicalSize<u32>,
     render_pipeline: RenderPipeline,
-    vertex_buffer: Buffer,
-    index_buffer_pentagon: Buffer,
-    num_indices_pentagon: u32,
-    diffuse_bind_group: BindGroup,
-    diffuse_texture: texture::MyTexture,
     depth_texture: texture::MyTexture,
     camera: camera::Camera,
     uniforms: Uniforms,
@@ -179,6 +119,7 @@ struct State {
     uniform_bind_group: BindGroup,
     instances: Vec<MyInstance>,
     instance_buffer: Buffer,
+    obj_model: model::Model,
 }
 
 impl State {
@@ -222,13 +163,9 @@ impl State {
 
         let depth_texture = texture::MyTexture::depth(&device, &sc_desc, "depth texture");
 
-        let diffuse_bytes = include_bytes!("../happy-tree.bdff8a19.png");
-        let diffuse_texture =
-            texture::MyTexture::from_bytes(&device, &queue, diffuse_bytes, "happy tree").unwrap();
-
         let texture_bind_group_layout =
             device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("diff tex bind group layuot"),
+                label: Some("texture bind group layout"),
                 entries: &[
                     BindGroupLayoutEntry {
                         binding: 0,
@@ -252,29 +189,19 @@ impl State {
                 ],
             });
 
-        let diffuse_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("diff bind group"),
-            layout: &texture_bind_group_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&diffuse_texture.view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-        });
-
+        const SPACE_BETWEEN: f32 = 3.0;
         let instances = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(move |z| {
+            .flat_map(|z| {
                 (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let position = Vector3::new(x as f32, 0.0, z as f32) - INSTANCE_DISPLACEMENT;
+                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                    let position = Vector3 { x, y: 0.0, z };
+
                     let rotation = if position.is_zero() {
-                        Quaternion::from_axis_angle(Vector3::unit_z(), Deg(0.0))
+                        Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
                     } else {
-                        Quaternion::from_axis_angle(position.clone().normalize(), Deg(45.0))
+                        Quaternion::from_axis_angle(position.clone().normalize(), cgmath::Deg(45.0))
                     };
 
                     MyInstance { position, rotation }
@@ -288,6 +215,15 @@ impl State {
             contents: bytemuck::cast_slice(&instance_data),
             usage: BufferUsage::VERTEX,
         });
+
+        let res_dir = std::path::Path::new(env!("OUT_DIR")).join("res");
+        let obj_model = model::Model::load(
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+            res_dir.join("cube.obj"),
+        )
+        .unwrap();
 
         let camera = camera::Camera {
             eye: (0.0, 1.0, 2.0).into(),
@@ -351,7 +287,7 @@ impl State {
             vertex: VertexState {
                 module: &vs_module,
                 entry_point: "main",
-                buffers: &[Vertex::desc(), InstanceRawXd::desc()],
+                buffers: &[model::ModelVertex::desc(), InstanceRawXd::desc()],
             },
             fragment: Some(FragmentState {
                 module: &fs_module,
@@ -385,20 +321,6 @@ impl State {
             },
         });
 
-        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("pentagon vertex buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: BufferUsage::VERTEX,
-        });
-
-        let index_buffer_pentagon = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("pentagon index buffer"),
-            contents: bytemuck::cast_slice(INDICES_PENTAGON),
-            usage: BufferUsage::INDEX,
-        });
-
-        let num_indices_pentagon = INDICES_PENTAGON.len() as u32;
-
         Self {
             surface,
             device,
@@ -407,11 +329,6 @@ impl State {
             swapchain,
             size,
             render_pipeline,
-            vertex_buffer,
-            index_buffer_pentagon,
-            num_indices_pentagon,
-            diffuse_bind_group,
-            diffuse_texture,
             depth_texture,
             camera,
             uniforms,
@@ -419,10 +336,12 @@ impl State {
             uniform_bind_group,
             instances,
             instance_buffer,
+            obj_model,
         }
     }
 
     fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        self.camera.aspect = new_size.width as f32 / new_size.height as f32;
         self.size = new_size;
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
@@ -480,20 +399,21 @@ impl State {
                 }),
             });
 
+            rp.set_vertex_buffer(1, self.instance_buffer.slice(..));
             rp.set_pipeline(&self.render_pipeline);
 
-            rp.set_bind_group(0, &self.diffuse_bind_group, &[]);
-            rp.set_bind_group(1, &self.uniform_bind_group, &[]);
-
-            rp.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            rp.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            rp.set_index_buffer(self.index_buffer_pentagon.slice(..), IndexFormat::Uint16);
-
-            rp.draw_indexed(
-                0..self.num_indices_pentagon,
-                0,
-                0..self.instances.len() as _,
+            use model::DrawModel;
+            rp.draw_model_instanced(
+                &self.obj_model,
+                &self.uniform_bind_group,
+                0..self.instances.len() as u32,
             );
+            //rp.draw_mesh_instanced(
+            //    &self.obj_model.meshes[0],
+            //    material,
+            //    &self.uniform_bind_group,
+            //    0..self.instances.len() as u32,
+            //);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

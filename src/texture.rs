@@ -29,7 +29,7 @@ impl MyTexture {
         image: &DynamicImage,
         label: &str,
     ) -> Result<Self> {
-        let rgba = image.as_rgba8().unwrap();
+        let rgba = image.to_rgba8();
         let dimensions = image.dimensions();
 
         let size = Extent3d {
@@ -54,7 +54,7 @@ impl MyTexture {
                 mip_level: 0,
                 origin: Origin3d::ZERO,
             },
-            rgba,
+            &rgba,
             TextureDataLayout {
                 offset: 0,
                 bytes_per_row: 4 * dimensions.0,
@@ -119,5 +119,12 @@ impl MyTexture {
             view,
             sampler,
         }
+    }
+
+    pub fn load(device: &Device, queue: &Queue, path: impl AsRef<std::path::Path>) -> Result<Self> {
+        let path_copy = path.as_ref().to_path_buf();
+        let label = path_copy.to_str().unwrap();
+        let image = image::open(path)?;
+        Self::from_image(device, queue, &image, label)
     }
 }

@@ -6,6 +6,8 @@ use std::{
     process::Command,
 };
 
+use fs_extra::{copy_items, dir::CopyOptions};
+
 #[cfg(target_os = "windows")]
 const GLSLANG_VALIDATOR: &'static str = "glslangValidator.exe";
 
@@ -20,6 +22,13 @@ fn main() {
             std::process::exit(1);
         }
     }
+
+    println!("cargo:rerun-if-changed=res/*");
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let mut copy_options = CopyOptions::new();
+    copy_options.overwrite = true;
+    let paths = vec!["res/"];
+    copy_items(&paths, out_dir, &copy_options).unwrap();
 }
 
 #[allow(dead_code)]

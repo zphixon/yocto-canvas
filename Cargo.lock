@@ -522,6 +522,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
+name = "fs_extra"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
+
+[[package]]
 name = "fuchsia-zircon"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1717,6 +1723,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "tobj"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2468f55be8e59cf7219f1685cf1af4eb00ef2314823a7941a41c8d69538f881b"
+
+[[package]]
 name = "toml"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2134,9 +2146,11 @@ dependencies = [
  "bytemuck",
  "cgmath",
  "env_logger",
+ "fs_extra",
  "futures",
  "image",
  "log",
+ "tobj",
  "wgpu",
  "winit",
 ]
