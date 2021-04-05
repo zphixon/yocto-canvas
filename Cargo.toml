@@ -3,7 +3,7 @@ name = "yocto-canvas"
 version = "0.1.0"
 authors = ["Zack <zphixon@gmail.com>"]
 edition = "2018"
-build = "build.rs"
+#build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,6 +13,7 @@ build = "build.rs"
 env_logger = "0.8.3"
 log = "0.4.14"
 #pollster = "*"
+bytemuck = { version = "1.5.1", features = ["derive"] }
 
 cgmath = "0.17"
 futures = "0.3"

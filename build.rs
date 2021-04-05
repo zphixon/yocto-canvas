@@ -47,6 +47,10 @@ fn build() -> Result<(), String> {
     // TODO recursive?
     for entry in dir {
         let entry = entry.map_err(|e| format!("Could not read dir entry\n{}", e))?;
+        println!(
+            "cargo:rerun-if-changed={}",
+            entry.file_name().to_str().unwrap()
+        );
 
         // get the shader in path
         let shader_in = entry.path();

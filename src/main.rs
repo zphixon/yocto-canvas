@@ -7,14 +7,70 @@ use winit::{
 
 // i don't want to type 'wgpu' a thousand times thank you very much
 use wgpu::{
-    BackendBit, BlendState, Color, ColorTargetState, ColorWrite, CommandEncoderDescriptor,
-    CullMode, Device, DeviceDescriptor, Features, FragmentState, FrontFace, Instance, Limits,
-    LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PolygonMode, PowerPreference,
+    util::{BufferInitDescriptor, DeviceExt},
+    BackendBit, BlendState, Buffer, BufferAddress, BufferUsage, Color, ColorTargetState,
+    ColorWrite, CommandEncoderDescriptor, CullMode, Device, DeviceDescriptor, Features,
+    FragmentState, FrontFace, IndexFormat, InputStepMode, Instance, Limits, LoadOp,
+    MultisampleState, Operations, PipelineLayoutDescriptor, PolygonMode, PowerPreference,
     PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
-    ShaderFlags, ShaderModuleDescriptor, Surface, SwapChain, SwapChainDescriptor, SwapChainError,
-    TextureUsage, VertexState,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, Surface,
+    SwapChain, SwapChainDescriptor, SwapChainError, TextureUsage, VertexAttribute,
+    VertexBufferLayout, VertexFormat, VertexState,
 };
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+impl Vertex {
+    fn desc<'a>() -> VertexBufferLayout<'a> {
+        VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as BufferAddress,
+            step_mode: InputStepMode::Vertex,
+            attributes: &[
+                VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: VertexFormat::Float3,
+                },
+                VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as BufferAddress,
+                    shader_location: 1,
+                    format: VertexFormat::Float3,
+                },
+            ],
+        }
+    }
+}
+
+const VERTICES: &[Vertex] = &[
+    Vertex {
+        position: [-0.0868241, 0.49240386, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // A
+    Vertex {
+        position: [-0.49513406, 0.06958647, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // B
+    Vertex {
+        position: [-0.21918549, -0.44939706, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // C
+    Vertex {
+        position: [0.35966998, -0.3473291, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // D
+    Vertex {
+        position: [0.44147372, 0.2347359, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // E
+];
+
+const INDICES_PENTAGON: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+const INDICES_SCISSOR_BLADES: &[u16] = &[0, 1, 4, 4, 2, 3];
 
 struct State {
     surface: Surface,
@@ -24,6 +80,12 @@ struct State {
     swapchain: SwapChain,
     size: PhysicalSize<u32>,
     render_pipeline: RenderPipeline,
+    vertex_buffer: Buffer,
+    index_buffer_pentagon: Buffer,
+    num_indices_pentagon: u32,
+    index_buffer_scissor_blades: Buffer,
+    num_indices_scissor_blades: u32,
+    drawing_pentagon: bool,
 }
 
 impl State {
@@ -65,20 +127,10 @@ impl State {
 
         let swapchain = device.create_swap_chain(&surface, &sc_desc);
 
-        let vs_data = wgpu::util::make_spirv(include_bytes!("../shaders/shader.vert.spv"));
-        let fs_data = wgpu::util::make_spirv(include_bytes!("../shaders/shader.frag.spv"));
-
-        let vs_module = device.create_shader_module(&ShaderModuleDescriptor {
-            label: Some("vertex"),
-            source: vs_data,
-            flags: ShaderFlags::default(),
-        });
-
-        let fs_module = device.create_shader_module(&ShaderModuleDescriptor {
-            label: Some("vertex"),
-            source: fs_data,
-            flags: ShaderFlags::default(),
-        });
+        let vs_module =
+            device.create_shader_module(&wgpu::include_spirv!("../shaders/shader.vert.spv"));
+        let fs_module =
+            device.create_shader_module(&wgpu::include_spirv!("../shaders/shader.frag.spv"));
 
         let pipe_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("pipe layout"),
@@ -92,7 +144,7 @@ impl State {
             vertex: VertexState {
                 module: &vs_module,
                 entry_point: "main",
-                buffers: &[],
+                buffers: &[Vertex::desc()],
             },
             fragment: Some(FragmentState {
                 module: &fs_module,
@@ -119,6 +171,30 @@ impl State {
             },
         });
 
+        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("pentagon vertex buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: BufferUsage::VERTEX,
+        });
+
+        let index_buffer_pentagon = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("pentagon index buffer"),
+            contents: bytemuck::cast_slice(INDICES_PENTAGON),
+            usage: BufferUsage::INDEX,
+        });
+
+        let num_indices_pentagon = INDICES_PENTAGON.len() as u32;
+
+        let index_buffer_scissor_blades = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("scissor blades index buffer"),
+            contents: bytemuck::cast_slice(INDICES_SCISSOR_BLADES),
+            usage: BufferUsage::INDEX,
+        });
+
+        let num_indices_scissor_blades = INDICES_SCISSOR_BLADES.len() as u32;
+
+        let drawing_pentagon = true;
+
         Self {
             surface,
             device,
@@ -127,6 +203,12 @@ impl State {
             swapchain,
             size,
             render_pipeline,
+            vertex_buffer,
+            index_buffer_pentagon,
+            num_indices_pentagon,
+            index_buffer_scissor_blades,
+            num_indices_scissor_blades,
+            drawing_pentagon,
         }
     }
 
@@ -139,6 +221,18 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Space),
+                        ..
+                    },
+                ..
+            } => {
+                self.drawing_pentagon = !self.drawing_pentagon;
+                true
+            }
             _ => false,
         }
     }
@@ -173,7 +267,18 @@ impl State {
             });
 
             rp.set_pipeline(&self.render_pipeline);
-            rp.draw(0..3, 0..1);
+            rp.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+            if self.drawing_pentagon {
+                rp.set_index_buffer(self.index_buffer_pentagon.slice(..), IndexFormat::Uint16);
+                rp.draw_indexed(0..self.num_indices_pentagon, 0, 0..1);
+            } else {
+                rp.set_index_buffer(
+                    self.index_buffer_scissor_blades.slice(..),
+                    IndexFormat::Uint16,
+                );
+                rp.draw_indexed(0..self.num_indices_scissor_blades, 0, 0..1);
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
