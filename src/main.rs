@@ -1,3 +1,7 @@
+pub use anyhow::Result;
+
+use cgmath::{Deg, Matrix4, Point3, Vector3};
+
 use winit::{
     dpi::PhysicalSize,
     event::*,
@@ -10,18 +14,17 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BackendBit, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BlendState, Buffer, BufferAddress,
-    BufferUsage, Color, ColorTargetState, ColorWrite, CommandEncoderDescriptor, CullMode, Device,
-    DeviceDescriptor, Features, FragmentState, FrontFace, IndexFormat, InputStepMode, Instance,
-    Limits, LoadOp, MultisampleState, Operations, PipelineLayoutDescriptor, PolygonMode,
-    PowerPreference, PresentMode, PrimitiveState, PrimitiveTopology, Queue,
-    RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, RequestAdapterOptions, ShaderStage, Surface, SwapChain,
-    SwapChainDescriptor, SwapChainError, TextureSampleType, TextureUsage, TextureViewDimension,
-    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
+    BufferBindingType, BufferUsage, Color, ColorTargetState, ColorWrite, CommandEncoderDescriptor,
+    CullMode, Device, DeviceDescriptor, Features, FragmentState, FrontFace, IndexFormat,
+    InputStepMode, Instance, Limits, LoadOp, MultisampleState, Operations,
+    PipelineLayoutDescriptor, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
+    PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, ShaderStage, Surface,
+    SwapChain, SwapChainDescriptor, SwapChainError, TextureSampleType, TextureUsage,
+    TextureViewDimension, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
 };
 
-pub use anyhow::Result;
-
+mod camera;
 mod texture;
 
 #[repr(C)]
@@ -77,6 +80,25 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES_PENTAGON: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct Uniforms {
+    view_proj: [[f32; 4]; 4],
+}
+
+impl Uniforms {
+    fn new() -> Self {
+        use cgmath::SquareMatrix;
+        Self {
+            view_proj: Matrix4::identity().into(),
+        }
+    }
+
+    fn update_view_proj(&mut self, camera: &camera::Camera) {
+        self.view_proj = camera.build_view_proj_matrix().into();
+    }
+}
+
 struct State {
     surface: Surface,
     device: Device,
@@ -90,6 +112,11 @@ struct State {
     num_indices_pentagon: u32,
     diffuse_bind_group: BindGroup,
     diffuse_texture: texture::MyTexture,
+    camera: camera::Camera,
+    camera_controller: camera::CameraController,
+    uniforms: Uniforms,
+    uniform_buffer: Buffer,
+    uniform_bind_group: BindGroup,
 }
 
 impl State {
@@ -176,6 +203,51 @@ impl State {
             ],
         });
 
+        let camera_controller = camera::CameraController::new(0.2);
+
+        let camera = camera::Camera {
+            eye: (0.0, 1.0, 2.0).into(),
+            target: (0.0, 0.0, 0.0).into(),
+            up: Vector3::unit_y(),
+            aspect: sc_desc.width as f32 / sc_desc.height as f32,
+            fov: 45.0,
+            z_near: 0.1,
+            z_far: 100.0,
+        };
+
+        let mut uniforms = Uniforms::new();
+        uniforms.update_view_proj(&camera);
+
+        let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("uniform buffer"),
+            contents: bytemuck::cast_slice(&[uniforms]),
+            usage: BufferUsage::UNIFORM | BufferUsage::COPY_DST,
+        });
+
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("uniform bgl"),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStage::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let uniform_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("uniform bg"),
+            layout: &uniform_bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
+
         let vs_module =
             device.create_shader_module(&wgpu::include_spirv!("../shaders/shader.vert.spv"));
         let fs_module =
@@ -183,7 +255,7 @@ impl State {
 
         let pipe_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("pipe layout"),
-            bind_group_layouts: &[&texture_bind_group_layout],
+            bind_group_layouts: &[&texture_bind_group_layout, &uniform_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -247,6 +319,11 @@ impl State {
             num_indices_pentagon,
             diffuse_bind_group,
             diffuse_texture,
+            camera,
+            camera_controller,
+            uniforms,
+            uniform_buffer,
+            uniform_bind_group,
         }
     }
 
@@ -258,12 +335,18 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            _ => false,
-        }
+        self.camera_controller.process_events(event)
     }
 
-    fn update(&mut self) {}
+    fn update(&mut self) {
+        self.camera_controller.update_camera(&mut self.camera);
+        self.uniforms.update_view_proj(&self.camera);
+        self.queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.uniforms]),
+        );
+    }
 
     fn render(&mut self) -> Result<(), SwapChainError> {
         let frame = self.swapchain.get_current_frame()?.output;
@@ -293,10 +376,13 @@ impl State {
             });
 
             rp.set_pipeline(&self.render_pipeline);
-            rp.set_bind_group(0, &self.diffuse_bind_group, &[]);
-            rp.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
+            rp.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            rp.set_bind_group(1, &self.uniform_bind_group, &[]);
+
+            rp.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             rp.set_index_buffer(self.index_buffer_pentagon.slice(..), IndexFormat::Uint16);
+
             rp.draw_indexed(0..self.num_indices_pentagon, 0, 0..1);
         }
 
