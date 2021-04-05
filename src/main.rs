@@ -8,13 +8,14 @@ use winit::{
 // i don't want to type 'wgpu' a thousand times thank you very much
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BackendBit, Buffer, BufferAddress, BufferUsage, Color, ColorTargetState, ColorWrite,
-    CommandEncoderDescriptor, Device, DeviceDescriptor, Face, Features, FragmentState, FrontFace,
-    IndexFormat, InputStepMode, Instance, Limits, LoadOp, MultisampleState, Operations,
-    PipelineLayoutDescriptor, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
-    PrimitiveTopology, Queue, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, RequestAdapterOptions, Surface, SwapChain, SwapChainDescriptor,
-    SwapChainError, TextureUsage, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
+    BackendBit, BlendState, Buffer, BufferAddress, BufferUsage, Color, ColorTargetState,
+    ColorWrite, CommandEncoderDescriptor, CullMode, Device, DeviceDescriptor, Features,
+    FragmentState, FrontFace, IndexFormat, InputStepMode, Instance, Limits, LoadOp,
+    MultisampleState, Operations, PipelineLayoutDescriptor, PolygonMode, PowerPreference,
+    PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, Surface,
+    SwapChain, SwapChainDescriptor, SwapChainError, TextureUsage, VertexAttribute,
+    VertexBufferLayout, VertexFormat, VertexState,
 };
 
 #[repr(C)]
@@ -33,12 +34,12 @@ impl Vertex {
                 VertexAttribute {
                     offset: 0,
                     shader_location: 0,
-                    format: VertexFormat::Float32x3,
+                    format: VertexFormat::Float3,
                 },
                 VertexAttribute {
                     offset: std::mem::size_of::<[f32; 3]>() as BufferAddress,
                     shader_location: 1,
-                    format: VertexFormat::Float32x3,
+                    format: VertexFormat::Float3,
                 },
             ],
         }
@@ -114,7 +115,7 @@ impl State {
 
         let sc_desc = SwapChainDescriptor {
             usage: TextureUsage::RENDER_ATTACHMENT,
-            format: adapter.get_swap_chain_preferred_format(&surface).unwrap(),
+            format: adapter.get_swap_chain_preferred_format(&surface),
             width: size.width,
             height: size.height,
             present_mode: PresentMode::Fifo,
@@ -146,19 +147,17 @@ impl State {
                 entry_point: "main",
                 targets: &[ColorTargetState {
                     format: sc_desc.format,
-                    // alpha_blend: BlendState::REPLACE,
-                    // color_blend: BlendState::REPLACE,
+                    alpha_blend: BlendState::REPLACE,
+                    color_blend: BlendState::REPLACE,
                     write_mask: ColorWrite::ALL,
-                    blend: None,
                 }],
             }),
             primitive: PrimitiveState {
                 topology: PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: FrontFace::Ccw,
-                cull_mode: Some(Face::Back),
+                cull_mode: CullMode::Back,
                 polygon_mode: PolygonMode::Fill,
-                conservative: false,
             },
             depth_stencil: None,
             multisample: MultisampleState {
@@ -222,8 +221,8 @@ impl State {
         {
             let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("state render pass"),
-                color_attachments: &[RenderPassColorAttachment {
-                    view: &frame.view,
+                color_attachments: &[RenderPassColorAttachmentDescriptor {
+                    attachment: &frame.view,
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Clear(Color {

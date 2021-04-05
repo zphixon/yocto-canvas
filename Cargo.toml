@@ -1,25 +1,24 @@
 [package]
-name = "yocto-canvas"
-version = "0.1.0"
-authors = ["Zack <zphixon@gmail.com>"]
-edition = "2018"
-#build = "build.rs"
+name = 'yocto-canvas'
+version = '0.1.0'
+authors = ['Zack <zphixon@gmail.com>']
+edition = '2018'
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wgpu = { path = "../wgpu-rs", features = ["vulkan-portability"] }
-winit = "0.24.0"
-env_logger = "0.8.3"
-log = "0.4.14"
-#pollster = "*"
+winit = '0.24.0'
+env_logger = '0.8.3'
+log = '0.4.14'
+cgmath = '0.18.0'
+futures = '0.3.13'
+image = '0.23.14'
 
-cgmath = "0.17"
-futures = "0.3"
-#winit = "0.22"
-bytemuck = { version = "1.5.1", features = ["derive"] }
+[dependencies.wgpu]
+version = '0.7.1'
+features = ['vulkan-portability']
 
-#[dependencies.wgpu]
-#version = "0.7"
-#features = ["vulkan-portability"]
+[dependencies.bytemuck]
+version = '1.5.1'
+features = ['derive']
 
