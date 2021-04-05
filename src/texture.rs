@@ -26,6 +26,7 @@ impl MyTexture {
         image: &DynamicImage,
         label: &str,
     ) -> Result<Self> {
+        println!("{}", &format!("{:?}", image)[..60]);
         let rgba = image.as_rgba8().unwrap();
         let dimensions = image.dimensions();
 

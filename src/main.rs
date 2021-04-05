@@ -88,8 +88,10 @@ struct State {
     vertex_buffer: Buffer,
     index_buffer_pentagon: Buffer,
     num_indices_pentagon: u32,
-    diffuse_bind_group: BindGroup,
+    diffuse_bind_group_tree: BindGroup,
+    diffuse_bind_group_dogi: BindGroup,
     diffuse_texture: texture::MyTexture,
+    draw_tree: bool,
 }
 
 impl State {
@@ -131,13 +133,14 @@ impl State {
 
         let swapchain = device.create_swap_chain(&surface, &sc_desc);
 
-        let diffuse_bytes = include_bytes!("../happy-tree.bdff8a19.png");
-        let diffuse_texture =
-            texture::MyTexture::from_bytes(&device, &queue, diffuse_bytes, "happy tree").unwrap();
+        let diffuse_bytes_tree = include_bytes!("../happy-tree.bdff8a19.png");
+        let diffuse_texture_tree =
+            texture::MyTexture::from_bytes(&device, &queue, diffuse_bytes_tree, "happy tree")
+                .unwrap();
 
-        let texture_bind_group_layout =
+        let texture_bind_group_layout_tree =
             device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("diff tex bind group layuot"),
+                label: Some("tree diff tex bind group layuot"),
                 entries: &[
                     BindGroupLayoutEntry {
                         binding: 0,
@@ -154,24 +157,69 @@ impl State {
                         visibility: ShaderStage::FRAGMENT,
                         ty: BindingType::Sampler {
                             comparison: false,
-                            filtering: true,
+                            filtering: false,
                         },
                         count: None,
                     },
                 ],
             });
 
-        let diffuse_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("diff bind group"),
-            layout: &texture_bind_group_layout,
+        let diffuse_bind_group_tree = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("tree diff bind group"),
+            layout: &texture_bind_group_layout_tree,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&diffuse_texture.view),
+                    resource: BindingResource::TextureView(&diffuse_texture_tree.view),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&diffuse_texture.sampler),
+                    resource: BindingResource::Sampler(&diffuse_texture_tree.sampler),
+                },
+            ],
+        });
+
+        let diffuse_bytes_dogi = include_bytes!("../4751549.png");
+        let diffuse_texture_dogi =
+            texture::MyTexture::from_bytes(&device, &queue, diffuse_bytes_dogi, "dogi").unwrap();
+
+        let diffuse_bind_group_layout_dogi =
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("dogi bgld"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStage::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: false },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStage::FRAGMENT,
+                        ty: BindingType::Sampler {
+                            filtering: false,
+                            comparison: false,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        let diffuse_bind_group_dogi = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("dogi diff bind group"),
+            layout: &diffuse_bind_group_layout_dogi,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&diffuse_texture_dogi.view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&diffuse_texture_dogi.sampler),
                 },
             ],
         });
@@ -183,7 +231,7 @@ impl State {
 
         let pipe_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("pipe layout"),
-            bind_group_layouts: &[&texture_bind_group_layout],
+            bind_group_layouts: &[&texture_bind_group_layout_tree],
             push_constant_ranges: &[],
         });
 
@@ -245,8 +293,10 @@ impl State {
             vertex_buffer,
             index_buffer_pentagon,
             num_indices_pentagon,
-            diffuse_bind_group,
-            diffuse_texture,
+            diffuse_bind_group_tree,
+            diffuse_texture: diffuse_texture_tree,
+            diffuse_bind_group_dogi,
+            draw_tree: true,
         }
     }
 
@@ -259,6 +309,18 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Space),
+                        ..
+                    },
+                ..
+            } => {
+                self.draw_tree = !self.draw_tree;
+                true
+            }
             _ => false,
         }
     }
@@ -293,7 +355,13 @@ impl State {
             });
 
             rp.set_pipeline(&self.render_pipeline);
-            rp.set_bind_group(0, &self.diffuse_bind_group, &[]);
+
+            if self.draw_tree {
+                rp.set_bind_group(0, &self.diffuse_bind_group_tree, &[]);
+            } else {
+                rp.set_bind_group(0, &self.diffuse_bind_group_dogi, &[]);
+            }
+
             rp.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
             rp.set_index_buffer(self.index_buffer_pentagon.slice(..), IndexFormat::Uint16);
