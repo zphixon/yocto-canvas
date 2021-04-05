@@ -84,6 +84,7 @@ const INDICES_PENTAGON: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
     view_proj: [[f32; 4]; 4],
+    rotate_boy: [[f32; 4]; 4],
 }
 
 impl Uniforms {
@@ -91,6 +92,7 @@ impl Uniforms {
         use cgmath::SquareMatrix;
         Self {
             view_proj: Matrix4::identity().into(),
+            rotate_boy: Matrix4::identity().into(),
         }
     }
 
@@ -117,6 +119,7 @@ struct State {
     uniforms: Uniforms,
     uniform_buffer: Buffer,
     uniform_bind_group: BindGroup,
+    start_time: std::time::SystemTime,
 }
 
 impl State {
@@ -324,6 +327,7 @@ impl State {
             uniforms,
             uniform_buffer,
             uniform_bind_group,
+            start_time: std::time::SystemTime::now(),
         }
     }
 
@@ -341,6 +345,11 @@ impl State {
     fn update(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);
         self.uniforms.update_view_proj(&self.camera);
+        self.uniforms.rotate_boy = Matrix4::from_angle_y(Deg(std::time::SystemTime::now()
+            .duration_since(self.start_time)
+            .unwrap()
+            .as_millis() as f32))
+        .into();
         self.queue.write_buffer(
             &self.uniform_buffer,
             0,
@@ -400,7 +409,7 @@ fn main() {
     let mut state = futures::executor::block_on(State::new(&window));
 
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
+        //*control_flow = ControlFlow::Wait;
         match event {
             Event::WindowEvent {
                 ref event,
