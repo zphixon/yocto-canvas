@@ -18,6 +18,7 @@ pub struct MyTexture {
 impl MyTexture {
     pub const DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 
+    #[allow(dead_code)]
     pub fn from_bytes(device: &Device, queue: &Queue, bytes: &[u8], label: &str) -> Result<Self> {
         let img = image::load_from_memory(bytes)?;
         Self::from_image(device, queue, &img, label)

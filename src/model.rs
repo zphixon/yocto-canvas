@@ -1,7 +1,7 @@
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
-    BufferAddress, BufferDescriptor, BufferUsage, Device, IndexFormat, InputStepMode, Queue,
-    RenderPass, VertexAttribute, VertexBufferLayout, VertexFormat,
+    BufferAddress, BufferUsage, Device, IndexFormat, InputStepMode, Queue, RenderPass,
+    VertexAttribute, VertexBufferLayout, VertexFormat,
 };
 
 use crate::{texture::MyTexture, Result};

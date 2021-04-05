@@ -1,6 +1,6 @@
 pub use anyhow::Result;
 
-use cgmath::{Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Zero};
+use cgmath::{InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Zero};
 
 use winit::{
     dpi::PhysicalSize,
@@ -13,12 +13,12 @@ use winit::{
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BackendBit, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, BlendState, Buffer, BufferAddress,
-    BufferBindingType, BufferUsage, Color, ColorTargetState, ColorWrite, CommandEncoderDescriptor,
-    CompareFunction, CullMode, DepthBiasState, DepthStencilState, Device, DeviceDescriptor,
-    Features, FragmentState, FrontFace, IndexFormat, InputStepMode, Instance, Limits, LoadOp,
-    MultisampleState, Operations, PipelineLayoutDescriptor, PolygonMode, PowerPreference,
-    PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor,
+    BindGroupLayoutEntry, BindingType, BlendState, Buffer, BufferAddress, BufferBindingType,
+    BufferUsage, Color, ColorTargetState, ColorWrite, CommandEncoderDescriptor, CompareFunction,
+    CullMode, DepthBiasState, DepthStencilState, Device, DeviceDescriptor, Features, FragmentState,
+    FrontFace, InputStepMode, Instance, Limits, LoadOp, MultisampleState, Operations,
+    PipelineLayoutDescriptor, PolygonMode, PowerPreference, PresentMode, PrimitiveState,
+    PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor,
     RenderPassDepthStencilAttachmentDescriptor, RenderPassDescriptor, RenderPipeline,
     RenderPipelineDescriptor, RequestAdapterOptions, ShaderStage, StencilState, Surface, SwapChain,
     SwapChainDescriptor, SwapChainError, TextureSampleType, TextureUsage, TextureViewDimension,
@@ -402,7 +402,6 @@ impl State {
             rp.set_vertex_buffer(1, self.instance_buffer.slice(..));
             rp.set_pipeline(&self.render_pipeline);
 
-            use model::DrawModel;
             rp.draw_model_instanced(
                 &self.obj_model,
                 &self.uniform_bind_group,
