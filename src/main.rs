@@ -23,6 +23,7 @@ use wgpu::{
 
 mod texture;
 
+use std::collections::HashMap;
 use texture::MyTexture;
 
 //    top left             top right
@@ -93,6 +94,13 @@ impl Vertex {
     }
 }
 
+#[derive(Debug)]
+struct Mouse {
+    x: f32,
+    y: f32,
+    state: HashMap<MouseButton, ElementState>,
+}
+
 #[allow(dead_code)]
 struct State {
     surface: Surface,
@@ -105,7 +113,7 @@ struct State {
     texture: MyTexture,
     vertex_buffer: Buffer,
     // 😠 https://github.com/rust-windowing/winit/issues/883
-    mouse: [f32; 2],
+    mouse: Mouse,
 }
 
 impl State {
@@ -196,7 +204,11 @@ impl State {
             usage: BufferUsage::VERTEX,
         });
 
-        let mouse = [size.width as f32 / 2., size.height as f32 / 2.];
+        let mouse = Mouse {
+            x: size.width as f32 / 2.,
+            y: size.height as f32 / 2.,
+            state: HashMap::new(),
+        };
 
         Ok(Self {
             surface,
@@ -216,16 +228,16 @@ impl State {
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::MouseInput { state, button, .. } => {
-                println!(
-                    "{:?} {:?} at {:.02} {:.02}",
-                    state, button, self.mouse[0], self.mouse[1]
-                );
+                self.mouse.state.insert(button.clone(), state.clone());
                 true
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.mouse[0] = position.x as f32;
-                self.mouse[1] = position.y as f32;
-                false
+                self.mouse.x = position.x as f32;
+                self.mouse.y = position.y as f32;
+                self.mouse
+                    .state
+                    .iter()
+                    .any(|(_, state)| state == &ElementState::Pressed)
             }
             _ => false,
         }
