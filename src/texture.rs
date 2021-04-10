@@ -1,6 +1,6 @@
 use crate::{Context, Result};
 
-use image::{DynamicImage, GenericImageView, ImageBuffer, ImageFormat, RgbaImage};
+use image::{DynamicImage, GenericImageView, RgbaImage};
 
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,

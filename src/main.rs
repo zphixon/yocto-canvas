@@ -11,31 +11,19 @@ use winit::{
 
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BackendBit, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, BlendState, Buffer, BufferAddress,
-    BufferUsage, ColorTargetState, ColorWrite, CommandEncoderDescriptor, CullMode, Device,
-    DeviceDescriptor, Features, FragmentState, FrontFace, InputStepMode, Instance, LoadOp,
-    MultisampleState, Operations, PipelineLayoutDescriptor, PolygonMode, PresentMode,
-    PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
-    ShaderStage, Surface, SwapChain, SwapChainDescriptor, SwapChainError, TextureSampleType,
-    TextureUsage, TextureViewDimension, VertexAttribute, VertexBufferLayout, VertexFormat,
-    VertexState,
+    BackendBit, BlendState, Buffer, BufferAddress, BufferUsage, ColorTargetState, ColorWrite,
+    CommandEncoderDescriptor, CullMode, Device, DeviceDescriptor, Features, FragmentState,
+    FrontFace, InputStepMode, Instance, LoadOp, MultisampleState, Operations,
+    PipelineLayoutDescriptor, PolygonMode, PresentMode, PrimitiveState, PrimitiveTopology, Queue,
+    RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, RequestAdapterOptions, Surface, SwapChain, SwapChainDescriptor,
+    SwapChainError, TextureCopyView, TextureUsage, VertexAttribute, VertexBufferLayout,
+    VertexFormat, VertexState,
 };
 
 mod texture;
 
 use texture::MyTexture;
-
-//const vec2 corners[6] = vec2[6](
-//    vec2(-1.0, -1.0),
-//    vec2(1.0, -1.0),
-//    vec2(1.0, 1.0),
-//
-//    vec2(1.0, 1.0),
-//    vec2(-1.0, 1.0),
-//    vec2(-1.0, -1.0)
-//);
 
 //    top left             top right
 // xy -1 -1                1 -1
@@ -105,6 +93,7 @@ impl Vertex {
     }
 }
 
+#[allow(dead_code)]
 struct State {
     surface: Surface,
     device: Device,
@@ -115,6 +104,8 @@ struct State {
     pipeline: RenderPipeline,
     texture: MyTexture,
     vertex_buffer: Buffer,
+    // 😠 https://github.com/rust-windowing/winit/issues/883
+    mouse: [f32; 2],
 }
 
 impl State {
@@ -205,6 +196,8 @@ impl State {
             usage: BufferUsage::VERTEX,
         });
 
+        let mouse = [size.width as f32 / 2., size.height as f32 / 2.];
+
         Ok(Self {
             surface,
             device,
@@ -215,12 +208,27 @@ impl State {
             pipeline,
             texture,
             vertex_buffer,
+            mouse,
         })
     }
 
     // returns true if state captured the event, false otherwise
-    fn input(&mut self, _event: &WindowEvent) -> bool {
-        false
+    fn input(&mut self, event: &WindowEvent) -> bool {
+        match event {
+            WindowEvent::MouseInput { state, button, .. } => {
+                println!(
+                    "{:?} {:?} at {:.02} {:.02}",
+                    state, button, self.mouse[0], self.mouse[1]
+                );
+                true
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.mouse[0] = position.x as f32;
+                self.mouse[1] = position.y as f32;
+                false
+            }
+            _ => false,
+        }
     }
 
     fn render(&mut self) -> Result<()> {
@@ -282,6 +290,15 @@ fn main() -> Result<()> {
                 window_id,
             } if window_id == window.id() && !state.input(event) => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            ..
+                        },
+                    ..
+                } => *control_flow = ControlFlow::Exit,
                 _ => {}
             },
             Event::RedrawRequested(window_id) if window_id == window.id() => {
