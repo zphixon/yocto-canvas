@@ -36,7 +36,7 @@ impl MyTexture {
         let width = 800;
         let height = 675;
 
-        let data = vec![0xffu8; width as usize * height as usize * 4];
+        let data = vec![0x0fu8; width as usize * height as usize * 4];
         let image: RgbaImage = image::ImageBuffer::from_vec(width, height, data).unwrap();
 
         Self::from_image(device, queue, &DynamicImage::ImageRgba8(image), label)
