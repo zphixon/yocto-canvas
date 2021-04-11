@@ -147,8 +147,8 @@ struct State {
 impl State {
     async fn new(window: &Window) -> Result<Self> {
         let size = window.inner_size();
-        let instance = Instance::new(BackendBit::PRIMARY);
-        //let instance = Instance::new(BackendBit::DX12);
+        //let instance = Instance::new(BackendBit::PRIMARY);
+        let instance = Instance::new(BackendBit::DX12);
         let surface = unsafe { instance.create_surface(window) };
 
         let adapter = instance
@@ -183,20 +183,12 @@ impl State {
 
         let (texture, image) = MyTexture::empty(&device, &queue, "image")?;
 
-        //#[rustfmt::skip]
-        //let model = Matrix4::new(
-        //    image.width() as f32 / size.width as f32, 0., 0., 0.,
-        //    0., image.height() as f32 / size.height as f32, 0., 0.,
-        //    0., 0., 1., 0.,
-        //    0., 0., 0., 1.,
-        //).into();
-
         let updated_uniforms = true;
 
         let uniform = Uniform {
-            zoom: 1.0f32,
             model: Matrix4::identity().into(),
             view: Matrix4::identity().into(),
+            zoom: 1.0f32,
         };
 
         let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -351,7 +343,7 @@ impl State {
             //    )
             //)
             //.into();
-            let view = Matrix4::identity().into();
+            let view = (Matrix4::identity()).into();
 
             //#[rustfmt::skip]
             //let model = (OPENGL_TO_WGPU_MATRIX *
@@ -362,16 +354,16 @@ impl State {
             //        0., 0., 0., 1.,
             //    ))
             //    .into();
-            let model = Matrix4::identity().into();
+            let model = (Matrix4::identity()).into();
 
             //println!("{:?}", view);
 
             // this should work fine. however, for some reason the last row has been moved to the front in vulkan,
             // and in dx12, the entire uniform is zero. i have no idea why this is happening and it's quite frustrating.
             let uniform = Uniform {
-                zoom: 1.0f32,
                 model,
                 view,
+                zoom: 1.0f32,
             };
 
             self.queue
