@@ -2,6 +2,12 @@ pub use anyhow::{Context, Result};
 
 use bytemuck::{Pod, Zeroable};
 
+use cgmath::Matrix4;
+
+use image::RgbaImage;
+
+use texture::MyTexture;
+
 use winit::{
     dpi::PhysicalSize,
     event::*,
@@ -11,21 +17,29 @@ use winit::{
 
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BackendBit, BlendState, Buffer, BufferAddress, BufferCopyView, BufferUsage, ColorTargetState,
-    ColorWrite, CommandEncoderDescriptor, CullMode, Device, DeviceDescriptor, Extent3d, Features,
-    FragmentState, FrontFace, InputStepMode, Instance, LoadOp, MultisampleState, Operations,
-    Origin3d, PipelineLayoutDescriptor, PolygonMode, PresentMode, PrimitiveState,
-    PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, Surface, SwapChain,
+    BackendBit, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingType, BlendState, Buffer, BufferAddress, BufferBindingType,
+    BufferCopyView, BufferUsage, ColorTargetState, ColorWrite, CommandEncoderDescriptor, CullMode,
+    Device, DeviceDescriptor, Extent3d, Features, FragmentState, FrontFace, InputStepMode,
+    Instance, LoadOp, MultisampleState, Operations, Origin3d, PipelineLayoutDescriptor,
+    PolygonMode, PresentMode, PrimitiveState, PrimitiveTopology, Queue,
+    RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, RequestAdapterOptions, ShaderStage, Surface, SwapChain,
     SwapChainDescriptor, SwapChainError, TextureCopyView, TextureDataLayout, TextureUsage,
     VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
 };
 
+use std::collections::HashMap;
+
 mod texture;
 
-use image::RgbaImage;
-use std::collections::HashMap;
-use texture::MyTexture;
+#[rustfmt::skip]
+pub const OPENGL_TO_WGPU_MATRIX: Matrix4<f32> = Matrix4::new(
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.5, 0.0,
+    0.0, 0.0, 0.5, 1.0,
+);
 
 //    top left             top right
 // xy -1 -1                1 -1
@@ -95,6 +109,20 @@ impl Vertex {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+struct Uniform {
+    view: [[f32; 4]; 4],
+}
+
+impl Uniform {
+    fn new(left: f32, right: f32, bottom: f32, top: f32) -> Self {
+        Self {
+            view: cgmath::ortho(left, right, bottom, top, 0.0, 1.0).into(),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Mouse {
     x: f32,
@@ -117,6 +145,9 @@ struct State {
     vertex_buffer: Buffer,
     // 😠 https://github.com/rust-windowing/winit/issues/883
     mouse: Mouse,
+    uniform: Uniform,
+    uniform_buffer: Buffer,
+    uniform_bind_group: BindGroup,
 }
 
 impl State {
@@ -157,9 +188,41 @@ impl State {
 
         let (texture, image) = MyTexture::empty(&device, &queue, "image")?;
 
+        let uniform = Uniform::new(0., size.width as f32, size.height as f32, 0.);
+
+        let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("uniform"),
+            contents: bytemuck::cast_slice(&[uniform]),
+            usage: BufferUsage::UNIFORM | BufferUsage::COPY_DST,
+        });
+
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("uniform bgl"),
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStage::VERTEX,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let uniform_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("uniform b group"),
+            layout: &uniform_bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
+
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("pipeline layout"),
-            bind_group_layouts: &[&texture.group_layout],
+            bind_group_layouts: &[&texture.group_layout, &uniform_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -226,6 +289,9 @@ impl State {
             image,
             vertex_buffer,
             mouse,
+            uniform,
+            uniform_buffer,
+            uniform_bind_group,
         })
     }
 
@@ -262,6 +328,27 @@ impl State {
             self.image.as_mut()[300_001] = 0x0f;
             self.image.as_mut()[300_002] = 0x0f;
         }
+    }
+
+    fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        self.size = new_size;
+        self.sc_desc.width = new_size.width;
+        self.sc_desc.height = new_size.height;
+        self.swapchain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
+
+        let p: [[f32; 4]; 4] = (OPENGL_TO_WGPU_MATRIX * Matrix4::from(self.uniform.view))
+            //* cgmath::ortho(
+            //    0.0,
+            //    self.size.width as f32,
+            //    0.0,
+            //    self.size.height as f32,
+            //    -1.0,
+            //    1.0,
+            //))
+            .into();
+
+        self.queue
+            .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&p));
     }
 
     fn render(&mut self) -> Result<()> {
@@ -302,13 +389,19 @@ impl State {
                 depth_stencil_attachment: None,
             });
 
-            // ????
-            rp.set_viewport(0.0, 0.0, 800.0, 675.0, 0.0, 1.0);
+            rp.set_viewport(
+                0.,
+                0.,
+                self.size.width as f32,
+                self.size.height as f32,
+                0.,
+                1.,
+            );
 
             rp.set_pipeline(&self.pipeline);
 
             rp.set_bind_group(0, &self.texture.group, &[]);
-            //rp.set_bind_group(1, self.uniform)
+            rp.set_bind_group(1, &self.uniform_bind_group, &[]);
 
             rp.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
@@ -346,6 +439,7 @@ fn main() -> Result<()> {
                 } else {
                     match event {
                         WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        // TODO remove later
                         WindowEvent::KeyboardInput {
                             input:
                                 KeyboardInput {
@@ -355,6 +449,10 @@ fn main() -> Result<()> {
                                 },
                             ..
                         } => *control_flow = ControlFlow::Exit,
+                        WindowEvent::Resized(size) => state.resize(*size),
+                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                            state.resize(**new_inner_size);
+                        }
                         _ => {}
                     }
                 }
