@@ -147,8 +147,7 @@ struct State {
 impl State {
     async fn new(window: &Window) -> Result<Self> {
         let size = window.inner_size();
-        //let instance = Instance::new(BackendBit::PRIMARY);
-        let instance = Instance::new(BackendBit::DX12);
+        let instance = Instance::new(BackendBit::PRIMARY);
         let surface = unsafe { instance.create_surface(window) };
 
         let adapter = instance
@@ -172,7 +171,7 @@ impl State {
             .context("Couldn't get device")?;
 
         let sc_desc = SwapChainDescriptor {
-            usage: TextureUsage::RENDER_ATTACHMENT,
+            usage: TextureUsage::RENDER_ATTACHMENT | TextureUsage::COPY_SRC,
             format: adapter.get_swap_chain_preferred_format(&surface),
             width: size.width,
             height: size.height,
