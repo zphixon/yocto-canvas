@@ -2,6 +2,7 @@ use crate::{Context, Result};
 
 use image::{DynamicImage, GenericImageView, RgbaImage};
 
+use futures::AsyncReadExt;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Device, Extent3d, Origin3d, Queue, Sampler,
@@ -13,9 +14,11 @@ use wgpu::{
 pub struct MyTexture {
     pub texture: Texture,
     pub view: TextureView,
+    pub size: Extent3d,
+    pub layout: TextureDataLayout,
     pub sampler: Sampler,
-    pub layout: BindGroupLayout,
     pub group: BindGroup,
+    pub group_layout: BindGroupLayout,
 }
 
 #[allow(dead_code)]
@@ -32,14 +35,27 @@ impl MyTexture {
         Self::from_image(device, queue, &img, label)
     }
 
-    pub fn empty(device: &Device, queue: &Queue, label: &str) -> Result<Self> {
+    pub fn empty(device: &Device, queue: &Queue, label: &str) -> Result<(Self, RgbaImage)> {
         let width = 800;
         let height = 675;
 
-        let data = vec![0x0fu8; width as usize * height as usize * 4];
-        let image: RgbaImage = image::ImageBuffer::from_vec(width, height, data).unwrap();
+        use std::iter::once;
+        let data = vec![(0x0f, 0x0f, 0x0f, 0xff); width as usize * height as usize]
+            .into_iter()
+            .flat_map(|(r, g, b, a)| once(r).chain(once(g)).chain(once(b)).chain(once(a)))
+            .collect::<Vec<u8>>();
 
-        Self::from_image(device, queue, &DynamicImage::ImageRgba8(image), label)
+        let image: RgbaImage = image::ImageBuffer::from_vec(width, height, data.clone()).unwrap();
+
+        Ok((
+            Self::from_image(
+                device,
+                queue,
+                &DynamicImage::ImageRgba8(image.clone()),
+                label,
+            )?,
+            image,
+        ))
     }
 
     pub fn from_image(
@@ -67,6 +83,12 @@ impl MyTexture {
             usage: TextureUsage::SAMPLED | TextureUsage::COPY_DST,
         });
 
+        let layout = TextureDataLayout {
+            offset: 0,
+            bytes_per_row: 4 * dimensions.0,
+            rows_per_image: dimensions.1,
+        };
+
         queue.write_texture(
             TextureCopyView {
                 texture: &texture,
@@ -74,11 +96,7 @@ impl MyTexture {
                 origin: Origin3d::ZERO,
             },
             &rgba,
-            TextureDataLayout {
-                offset: 0,
-                bytes_per_row: 4 * dimensions.0,
-                rows_per_image: dimensions.1,
-            },
+            layout.clone(),
             size,
         );
 
@@ -93,7 +111,7 @@ impl MyTexture {
             ..Default::default()
         });
 
-        let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        let group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some(&format!("{} layout", label)),
             entries: &[
                 BindGroupLayoutEntry {
@@ -120,7 +138,7 @@ impl MyTexture {
 
         let group = device.create_bind_group(&BindGroupDescriptor {
             label: Some(&format!("{} group", label)),
-            layout: &layout,
+            layout: &group_layout,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
@@ -136,9 +154,11 @@ impl MyTexture {
         Ok(Self {
             texture,
             view,
-            sampler,
+            size,
             layout,
+            sampler,
             group,
+            group_layout,
         })
     }
 

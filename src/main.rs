@@ -11,18 +11,19 @@ use winit::{
 
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BackendBit, BlendState, Buffer, BufferAddress, BufferUsage, ColorTargetState, ColorWrite,
-    CommandEncoderDescriptor, CullMode, Device, DeviceDescriptor, Features, FragmentState,
-    FrontFace, InputStepMode, Instance, LoadOp, MultisampleState, Operations,
-    PipelineLayoutDescriptor, PolygonMode, PresentMode, PrimitiveState, PrimitiveTopology, Queue,
-    RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, RequestAdapterOptions, Surface, SwapChain, SwapChainDescriptor,
-    SwapChainError, TextureCopyView, TextureUsage, VertexAttribute, VertexBufferLayout,
-    VertexFormat, VertexState,
+    BackendBit, BlendState, Buffer, BufferAddress, BufferCopyView, BufferUsage, ColorTargetState,
+    ColorWrite, CommandEncoderDescriptor, CullMode, Device, DeviceDescriptor, Extent3d, Features,
+    FragmentState, FrontFace, InputStepMode, Instance, LoadOp, MultisampleState, Operations,
+    Origin3d, PipelineLayoutDescriptor, PolygonMode, PresentMode, PrimitiveState,
+    PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions, Surface, SwapChain,
+    SwapChainDescriptor, SwapChainError, TextureCopyView, TextureDataLayout, TextureUsage,
+    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
 };
 
 mod texture;
 
+use image::RgbaImage;
 use std::collections::HashMap;
 use texture::MyTexture;
 
@@ -98,7 +99,8 @@ impl Vertex {
 struct Mouse {
     x: f32,
     y: f32,
-    state: HashMap<MouseButton, ElementState>,
+    left: ElementState,
+    right: ElementState,
 }
 
 #[allow(dead_code)]
@@ -111,6 +113,7 @@ struct State {
     size: PhysicalSize<u32>,
     pipeline: RenderPipeline,
     texture: MyTexture,
+    image: RgbaImage,
     vertex_buffer: Buffer,
     // 😠 https://github.com/rust-windowing/winit/issues/883
     mouse: Mouse,
@@ -152,11 +155,11 @@ impl State {
 
         let swapchain = device.create_swap_chain(&surface, &sc_desc);
 
-        let texture = MyTexture::empty(&device, &queue, "image")?;
+        let (texture, image) = MyTexture::empty(&device, &queue, "image")?;
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("pipeline layout"),
-            bind_group_layouts: &[&texture.layout],
+            bind_group_layouts: &[&texture.group_layout],
             push_constant_ranges: &[],
         });
 
@@ -207,7 +210,8 @@ impl State {
         let mouse = Mouse {
             x: size.width as f32 / 2.,
             y: size.height as f32 / 2.,
-            state: HashMap::new(),
+            left: ElementState::Released,
+            right: ElementState::Released,
         };
 
         Ok(Self {
@@ -219,6 +223,7 @@ impl State {
             size,
             pipeline,
             texture,
+            image,
             vertex_buffer,
             mouse,
         })
@@ -228,18 +233,34 @@ impl State {
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::MouseInput { state, button, .. } => {
-                self.mouse.state.insert(button.clone(), state.clone());
+                match button {
+                    MouseButton::Left => self.mouse.left = *state,
+                    MouseButton::Right => self.mouse.right = *state,
+                    _ => {}
+                }
+
                 true
             }
             WindowEvent::CursorMoved { position, .. } => {
                 self.mouse.x = position.x as f32;
                 self.mouse.y = position.y as f32;
-                self.mouse
-                    .state
-                    .iter()
-                    .any(|(_, state)| state == &ElementState::Pressed)
+                self.mouse.left == ElementState::Pressed
+                    || self.mouse.right == ElementState::Pressed
             }
             _ => false,
+        }
+    }
+
+    fn update(&mut self) {
+        if self.mouse.left == ElementState::Pressed {
+            //println!("{}", 300_000 % 4);
+            self.image.as_mut()[300_000] = 0xff;
+            self.image.as_mut()[300_001] = 0xff;
+            self.image.as_mut()[300_002] = 0xff;
+        } else {
+            self.image.as_mut()[300_000] = 0x0f;
+            self.image.as_mut()[300_001] = 0x0f;
+            self.image.as_mut()[300_002] = 0x0f;
         }
     }
 
@@ -250,6 +271,17 @@ impl State {
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("command encoder"),
             });
+
+        self.queue.write_texture(
+            TextureCopyView {
+                texture: &self.texture.texture,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+            },
+            self.image.as_raw(),
+            self.texture.layout.clone(),
+            self.texture.size.clone(),
+        );
 
         {
             let mut rp = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -269,6 +301,9 @@ impl State {
                 }],
                 depth_stencil_attachment: None,
             });
+
+            // ????
+            rp.set_viewport(0.0, 0.0, 800.0, 675.0, 0.0, 1.0);
 
             rp.set_pipeline(&self.pipeline);
 
@@ -291,42 +326,50 @@ fn main() -> Result<()> {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop)?;
+    window.set_inner_size(PhysicalSize {
+        width: 800,
+        height: 675,
+    });
 
     let mut state = futures::executor::block_on(State::new(&window))?;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
+        state.update();
         match event {
             Event::WindowEvent {
                 ref event,
                 window_id,
-            } if window_id == window.id() && !state.input(event) => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
+            } if window_id == window.id() => {
+                if state.input(&event) {
+                    window.request_redraw();
+                } else {
+                    match event {
+                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    ..
+                                },
                             ..
-                        },
-                    ..
-                } => *control_flow = ControlFlow::Exit,
-                _ => {}
-            },
-            Event::RedrawRequested(window_id) if window_id == window.id() => {
-                //state.update();
-                match state.render() {
-                    Ok(_) => {}
-                    Err(e) => match e.downcast::<SwapChainError>() {
-                        Ok(e) => match e {
-                            SwapChainError::Lost => {}
-                            SwapChainError::OutOfMemory => *control_flow = ControlFlow::Exit,
-                            e => println!("{}", e),
-                        },
-                        Err(e) => println!("{}", e),
-                    },
+                        } => *control_flow = ControlFlow::Exit,
+                        _ => {}
+                    }
                 }
             }
+            Event::RedrawRequested(window_id) if window_id == window.id() => match state.render() {
+                Ok(_) => {}
+                Err(e) => match e.downcast::<SwapChainError>() {
+                    Ok(e) => match e {
+                        SwapChainError::Lost => {}
+                        SwapChainError::OutOfMemory => *control_flow = ControlFlow::Exit,
+                        e => println!("{}", e),
+                    },
+                    Err(e) => println!("{}", e),
+                },
+            },
             _ => {}
         }
     });
