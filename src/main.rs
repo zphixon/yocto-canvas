@@ -2,7 +2,7 @@ pub use anyhow::{Context, Result};
 
 use bytemuck::{Pod, Zeroable};
 
-use cgmath::Matrix4;
+use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
 
 use image::RgbaImage;
 
@@ -112,15 +112,9 @@ impl Vertex {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct Uniform {
+    model: [[f32; 4]; 4],
     view: [[f32; 4]; 4],
-}
-
-impl Uniform {
-    fn new(left: f32, right: f32, bottom: f32, top: f32) -> Self {
-        Self {
-            view: cgmath::ortho(left, right, bottom, top, 0.0, 1.0).into(),
-        }
-    }
+    zoom: f32,
 }
 
 #[derive(Debug)]
@@ -145,7 +139,7 @@ struct State {
     vertex_buffer: Buffer,
     // 😠 https://github.com/rust-windowing/winit/issues/883
     mouse: Mouse,
-    uniform: Uniform,
+    updated_uniforms: bool,
     uniform_buffer: Buffer,
     uniform_bind_group: BindGroup,
 }
@@ -154,6 +148,7 @@ impl State {
     async fn new(window: &Window) -> Result<Self> {
         let size = window.inner_size();
         let instance = Instance::new(BackendBit::PRIMARY);
+        //let instance = Instance::new(BackendBit::DX12);
         let surface = unsafe { instance.create_surface(window) };
 
         let adapter = instance
@@ -188,7 +183,21 @@ impl State {
 
         let (texture, image) = MyTexture::empty(&device, &queue, "image")?;
 
-        let uniform = Uniform::new(0., size.width as f32, size.height as f32, 0.);
+        //#[rustfmt::skip]
+        //let model = Matrix4::new(
+        //    image.width() as f32 / size.width as f32, 0., 0., 0.,
+        //    0., image.height() as f32 / size.height as f32, 0., 0.,
+        //    0., 0., 1., 0.,
+        //    0., 0., 0., 1.,
+        //).into();
+
+        let updated_uniforms = true;
+
+        let uniform = Uniform {
+            zoom: 1.0f32,
+            model: Matrix4::identity().into(),
+            view: Matrix4::identity().into(),
+        };
 
         let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("uniform"),
@@ -289,7 +298,7 @@ impl State {
             image,
             vertex_buffer,
             mouse,
-            uniform,
+            updated_uniforms,
             uniform_buffer,
             uniform_bind_group,
         })
@@ -328,6 +337,47 @@ impl State {
             self.image.as_mut()[300_001] = 0x0f;
             self.image.as_mut()[300_002] = 0x0f;
         }
+
+        if !self.updated_uniforms {
+            //let view: [[f32; 4]; 4] = (
+            //    //OPENGL_TO_WGPU_MATRIX *
+            //    cgmath::ortho(
+            //        0.0,
+            //        self.size.width as f32,
+            //        self.size.height as f32,
+            //        0.0,
+            //        0.0,
+            //        1.0,
+            //    )
+            //)
+            //.into();
+            let view = Matrix4::identity().into();
+
+            //#[rustfmt::skip]
+            //let model = (OPENGL_TO_WGPU_MATRIX *
+            //    Matrix4::new(
+            //        self.image.width() as f32 / self.size.width as f32, 0., 0., 0.,
+            //        0., self.image.height() as f32 / self.size.height as f32, 0., 0.,
+            //        0., 0., 1., 0.,
+            //        0., 0., 0., 1.,
+            //    ))
+            //    .into();
+            let model = Matrix4::identity().into();
+
+            //println!("{:?}", view);
+
+            // this should work fine. however, for some reason the last row has been moved to the front in vulkan,
+            // and in dx12, the entire uniform is zero. i have no idea why this is happening and it's quite frustrating.
+            let uniform = Uniform {
+                zoom: 1.0f32,
+                model,
+                view,
+            };
+
+            self.queue
+                .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform]));
+            self.updated_uniforms = true;
+        }
     }
 
     fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -335,20 +385,6 @@ impl State {
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
         self.swapchain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
-
-        let p: [[f32; 4]; 4] = (OPENGL_TO_WGPU_MATRIX * Matrix4::from(self.uniform.view))
-            //* cgmath::ortho(
-            //    0.0,
-            //    self.size.width as f32,
-            //    0.0,
-            //    self.size.height as f32,
-            //    -1.0,
-            //    1.0,
-            //))
-            .into();
-
-        self.queue
-            .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&p));
     }
 
     fn render(&mut self) -> Result<()> {
@@ -410,6 +446,7 @@ impl State {
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
+        self.updated_uniforms = false;
 
         Ok(())
     }
