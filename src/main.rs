@@ -180,7 +180,9 @@ impl State {
 
         let swapchain = device.create_swap_chain(&surface, &sc_desc);
 
-        let (texture, image) = MyTexture::empty(&device, &queue, "image")?;
+        //let (texture, image) = MyTexture::empty(&device, &queue, "image")?;
+        let (texture, image) = MyTexture::load(&device, &queue, "4751549.png")?;
+        //let (texture, image) = MyTexture::load(&device, &queue, "happy-tree.bdff8a19.png")?;
 
         let updated_uniforms = true;
 
@@ -319,46 +321,29 @@ impl State {
 
     fn update(&mut self) {
         if self.mouse.left == ElementState::Pressed {
-            //println!("{}", 300_000 % 4);
-            self.image.as_mut()[300_000] = 0xff;
-            self.image.as_mut()[300_001] = 0xff;
-            self.image.as_mut()[300_002] = 0xff;
+            self.image.as_mut()[4] = 0xff;
+            self.image.as_mut()[5] = 0xff;
+            self.image.as_mut()[6] = 0xff;
         } else {
-            self.image.as_mut()[300_000] = 0x0f;
-            self.image.as_mut()[300_001] = 0x0f;
-            self.image.as_mut()[300_002] = 0x0f;
+            self.image.as_mut()[4] = 0xff;
+            self.image.as_mut()[5] = 0x00;
+            self.image.as_mut()[6] = 0x00;
         }
 
         if !self.updated_uniforms {
-            //let view: [[f32; 4]; 4] = (
-            //    //OPENGL_TO_WGPU_MATRIX *
-            //    cgmath::ortho(
-            //        0.0,
-            //        self.size.width as f32,
-            //        self.size.height as f32,
-            //        0.0,
-            //        0.0,
-            //        1.0,
-            //    )
-            //)
-            //.into();
+            // TODO determine if necessary
             let view = (Matrix4::identity()).into();
 
-            //#[rustfmt::skip]
-            //let model = (OPENGL_TO_WGPU_MATRIX *
-            //    Matrix4::new(
-            //        self.image.width() as f32 / self.size.width as f32, 0., 0., 0.,
-            //        0., self.image.height() as f32 / self.size.height as f32, 0., 0.,
-            //        0., 0., 1., 0.,
-            //        0., 0., 0., 1.,
-            //    ))
-            //    .into();
-            let model = (Matrix4::identity()).into();
+            #[rustfmt::skip]
+            let model = (OPENGL_TO_WGPU_MATRIX *
+                Matrix4::new(
+                    self.image.width() as f32 / self.size.width as f32, 0., 0., 0.,
+                    0., self.image.height() as f32 / self.size.height as f32, 0., 0.,
+                    0., 0., 1., 0.,
+                    0., 0., 0., 1.,
+                ))
+                .into();
 
-            //println!("{:?}", view);
-
-            // this should work fine. however, for some reason the last row has been moved to the front in vulkan,
-            // and in dx12, the entire uniform is zero. i have no idea why this is happening and it's quite frustrating.
             let uniform = Uniform {
                 model,
                 view,
@@ -477,9 +462,13 @@ fn main() -> Result<()> {
                                 },
                             ..
                         } => *control_flow = ControlFlow::Exit,
-                        WindowEvent::Resized(size) => state.resize(*size),
+                        WindowEvent::Resized(size) => {
+                            state.resize(*size);
+                            window.request_redraw();
+                        }
                         WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                             state.resize(**new_inner_size);
+                            window.request_redraw();
                         }
                         _ => {}
                     }
