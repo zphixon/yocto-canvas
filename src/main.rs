@@ -2,7 +2,7 @@ pub use anyhow::{Context, Result};
 
 use bytemuck::{Pod, Zeroable};
 
-use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
+use cgmath::{Matrix4, SquareMatrix};
 
 use image::RgbaImage;
 
@@ -19,17 +19,14 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BackendBit, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, BlendState, Buffer, BufferAddress, BufferBindingType,
-    BufferCopyView, BufferUsage, ColorTargetState, ColorWrite, CommandEncoderDescriptor, CullMode,
-    Device, DeviceDescriptor, Extent3d, Features, FragmentState, FrontFace, InputStepMode,
-    Instance, LoadOp, MultisampleState, Operations, Origin3d, PipelineLayoutDescriptor,
-    PolygonMode, PresentMode, PrimitiveState, PrimitiveTopology, Queue,
-    RenderPassColorAttachmentDescriptor, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, RequestAdapterOptions, ShaderStage, Surface, SwapChain,
-    SwapChainDescriptor, SwapChainError, TextureCopyView, TextureDataLayout, TextureUsage,
-    VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
+    BufferUsage, ColorTargetState, ColorWrite, CommandEncoderDescriptor, CullMode, Device,
+    DeviceDescriptor, Features, FragmentState, FrontFace, InputStepMode, Instance, LoadOp,
+    MultisampleState, Operations, Origin3d, PipelineLayoutDescriptor, PolygonMode, PresentMode,
+    PrimitiveState, PrimitiveTopology, Queue, RenderPassColorAttachmentDescriptor,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, RequestAdapterOptions,
+    ShaderStage, Surface, SwapChain, SwapChainDescriptor, SwapChainError, TextureCopyView,
+    TextureUsage, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
 };
-
-use std::collections::HashMap;
 
 mod texture;
 

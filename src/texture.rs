@@ -2,7 +2,6 @@ use crate::{Context, Result};
 
 use image::{DynamicImage, GenericImageView, RgbaImage};
 
-use futures::AsyncReadExt;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, Device, Extent3d, Origin3d, Queue, Sampler,
