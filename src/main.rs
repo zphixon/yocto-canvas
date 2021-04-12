@@ -139,6 +139,7 @@ struct State {
     vertex_buffer: Buffer,
     // 😠 https://github.com/rust-windowing/winit/issues/883
     mouse: Mouse,
+    zoom: f32,
     updated_uniforms: bool,
     uniform_buffer: Buffer,
     uniform_bind_group: BindGroup,
@@ -184,7 +185,7 @@ impl State {
         let (texture, image) = MyTexture::load(&device, &queue, "4751549.png")?;
         //let (texture, image) = MyTexture::load(&device, &queue, "happy-tree.bdff8a19.png")?;
 
-        let updated_uniforms = true;
+        let updated_uniforms = false;
 
         let uniform = Uniform {
             model: Matrix4::identity().into(),
@@ -279,6 +280,8 @@ impl State {
             right: ElementState::Released,
         };
 
+        let zoom = 1.0;
+
         Ok(Self {
             surface,
             device,
@@ -291,6 +294,7 @@ impl State {
             image,
             vertex_buffer,
             mouse,
+            zoom,
             updated_uniforms,
             uniform_buffer,
             uniform_bind_group,
@@ -298,6 +302,7 @@ impl State {
     }
 
     // returns true if state captured the event, false otherwise
+    // redraws if returns true
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::MouseInput { state, button, .. } => {
@@ -315,6 +320,13 @@ impl State {
                 self.mouse.left == ElementState::Pressed
                     || self.mouse.right == ElementState::Pressed
             }
+            WindowEvent::MouseWheel {
+                delta: MouseScrollDelta::LineDelta(_x, y),
+                ..
+            } => {
+                self.zoom = (self.zoom + y.signum()).clamp(1.0, 10.0);
+                true
+            }
             _ => false,
         }
     }
@@ -331,9 +343,9 @@ impl State {
         }
 
         if !self.updated_uniforms {
-            // TODO determine if necessary
+            // TODO i've decided it's unnecessary
+            // I will replace with simple float uniforms to represent x/y scaling and just do it the sane way
             let view = (Matrix4::identity()).into();
-
             #[rustfmt::skip]
             let model = (OPENGL_TO_WGPU_MATRIX *
                 Matrix4::new(
@@ -347,7 +359,7 @@ impl State {
             let uniform = Uniform {
                 model,
                 view,
-                zoom: 1.0f32,
+                zoom: self.zoom,
             };
 
             self.queue
@@ -441,13 +453,13 @@ fn main() -> Result<()> {
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
-        state.update();
         match event {
             Event::WindowEvent {
                 ref event,
                 window_id,
             } if window_id == window.id() => {
                 if state.input(&event) {
+                    state.update();
                     window.request_redraw();
                 } else {
                     match event {
@@ -464,10 +476,12 @@ fn main() -> Result<()> {
                         } => *control_flow = ControlFlow::Exit,
                         WindowEvent::Resized(size) => {
                             state.resize(*size);
+                            state.update();
                             window.request_redraw();
                         }
                         WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                             state.resize(**new_inner_size);
+                            state.update();
                             window.request_redraw();
                         }
                         _ => {}

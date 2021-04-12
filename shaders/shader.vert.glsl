@@ -15,5 +15,6 @@ void main() {
     // TODO determine if necessary
     //v_tex_coords = vec2(a_tex_coords.x, 1 - a_tex_coords.y);
     v_tex_coords = a_tex_coords;
-    gl_Position = zoom * view * model * vec4(a_position, 0.0, 1.0);
+    vec2 pos = zoom * a_position;
+    gl_Position = view * model * vec4(pos, 0.0, 1.0);
 }
