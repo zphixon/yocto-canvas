@@ -30,7 +30,7 @@ impl MyTexture {
         queue: &Queue,
         bytes: &[u8],
         label: &str,
-    ) -> Result<Self> {
+    ) -> Result<(MyTexture, RgbaImage)> {
         let img = image::load_from_memory(bytes).context("Couldn't load image from memory")?;
         Self::from_image(device, queue, &img, label)
     }
@@ -47,15 +47,12 @@ impl MyTexture {
 
         let image: RgbaImage = image::ImageBuffer::from_vec(width, height, data.clone()).unwrap();
 
-        Ok((
-            Self::from_image(
-                device,
-                queue,
-                &DynamicImage::ImageRgba8(image.clone()),
-                label,
-            )?,
-            image,
-        ))
+        Self::from_image(
+            device,
+            queue,
+            &DynamicImage::ImageRgba8(image.clone()),
+            label,
+        )
     }
 
     pub fn from_image(
@@ -63,7 +60,7 @@ impl MyTexture {
         queue: &Queue,
         image: &DynamicImage,
         label: &str,
-    ) -> Result<Self> {
+    ) -> Result<(Self, RgbaImage)> {
         let rgba = image.to_rgba8();
         let dimensions = image.dimensions();
 
@@ -105,7 +102,7 @@ impl MyTexture {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
+            mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
@@ -151,18 +148,25 @@ impl MyTexture {
             ],
         });
 
-        Ok(Self {
-            texture,
-            view,
-            size,
-            layout,
-            sampler,
-            group,
-            group_layout,
-        })
+        Ok((
+            Self {
+                texture,
+                view,
+                size,
+                layout,
+                sampler,
+                group,
+                group_layout,
+            },
+            rgba,
+        ))
     }
 
-    pub fn load(device: &Device, queue: &Queue, path: impl AsRef<std::path::Path>) -> Result<Self> {
+    pub fn load(
+        device: &Device,
+        queue: &Queue,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(MyTexture, RgbaImage)> {
         let path_copy = path.as_ref().to_path_buf();
         let label = path_copy.to_str().unwrap();
         let image = image::open(path).context("Couldn't find image")?;
