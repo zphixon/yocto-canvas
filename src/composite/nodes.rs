@@ -89,21 +89,28 @@ macro_rules! impl_node {
     }
 }
 
-impl_node!(MixRgba; in INPUT_A INPUT_B; out OUTPUT_MIX; has mix: f32; |this: &MixRgba, mut input: HashMap<&'static str, ImageData>| {
-    let a = input.remove(Self::INPUT_A)?;
-    let b = input.remove(Self::INPUT_B)?;
+impl_node!(
+    MixRgba;
+    in INPUT_A INPUT_B;
+    out OUTPUT_MIX;
+    has mix: f32;
 
-    let mut output = HashMap::new();
-    output.insert(
-        Self::OUTPUT_MIX,
-        ImageData {
-            data: a
-                .into_iter()
-                .zip(b.into_iter())
-                .map(|(a, b)| a * this.mix + b * (1. - this.mix))
-                .collect(),
-        },
-    );
+    |this: &MixRgba, mut input: HashMap<&'static str, ImageData>| {
+        let a = input.remove(Self::INPUT_A)?;
+        let b = input.remove(Self::INPUT_B)?;
 
-    Some(output)
-});
+        let mut output = HashMap::new();
+        output.insert(
+            Self::OUTPUT_MIX,
+            ImageData {
+                data: a
+                    .into_iter()
+                    .zip(b.into_iter())
+                    .map(|(a, b)| a * this.mix + b * (1. - this.mix))
+                    .collect(),
+            },
+        );
+
+        Some(output)
+    }
+);
