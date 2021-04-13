@@ -180,4 +180,6 @@ fn node_graph_connect() {
         },
     );
     println!("{:#?}", graph);
+
+    panic!("ok");
 }
