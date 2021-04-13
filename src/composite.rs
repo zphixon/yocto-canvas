@@ -2,6 +2,7 @@ use crate::image::ImageData;
 
 use std::{collections::HashMap, fmt::Debug};
 
+// generate a new node name
 fn format_name(s: &str, i: usize) -> String {
     format!(
         "{}{}",
@@ -14,45 +15,77 @@ fn format_name(s: &str, i: usize) -> String {
     )
 }
 
+// TODO proc macro???? that would be sick
 pub trait Node: Debug {
     //fn set_setting(&mut self, setting: Setting, value: impl Into<Setting>); // TODO
+    /// Get the name of the node.
+    ///
+    /// Used to automatically generate names for new nodes in the graph.
     fn name(&self) -> &'static str; // TODO this is a hack
+
+    /// TODO Execute the node.
+    ///
+    /// Meant to only be called by NodeGraph.
     fn execute(
         &self,
         input: HashMap<&'static str, ImageData>,
     ) -> Option<HashMap<&'static str, ImageData>>;
 
-    fn input_source(&self, slot: &'static str) -> Option<&Port>;
-    fn output_destinations(&self, slot: &'static str) -> Option<&[Port]>;
+    /// Get the node and output slot connected to the input slot.
+    fn input_source(&self, input_slot: &'static str) -> Option<&Port>;
 
-    fn connect_input(&mut self, slot: &'static str, from: Port);
-    fn connect_output(&mut self, slot: &'static str, to: Port);
-    fn remove_output(&mut self, slot: &'static str, to: &Port);
+    /// Get the destination ports of the output slot.
+    fn output_destinations(&self, output_slot: &'static str) -> Option<&[Port]>;
 
-    fn has_connection(&self, slot: &'static str, to: &Port) -> bool {
-        self.output_destinations(slot)
-            .map_or(false, |destinations| destinations.contains(to))
+    /// Connect the input slot to the source port. Must replace the connection.
+    ///
+    /// Data flows from `source_port.node_name.output_port_name` to `self.input_slot`.
+    fn connect_input(&mut self, input_slot: &'static str, source_port: Port);
+
+    /// Connect the output slot to the destination port.
+    ///
+    /// Data flows from `self.output_slot` to `destination_port.node_name.input_port_name`.
+    fn connect_output(&mut self, output_slot: &'static str, destination_port: Port);
+
+    /// Remove the destination port from the output slot.
+    ///
+    /// Data will no longer flow from `self.output_slot` to `destination_port.node_name.input_port_name`.
+    fn remove_output(&mut self, output_slot: &'static str, destination_port: &Port);
+
+    /// Check if the node has a connection from `self.output_slot` to `destination_port.node_name.input_port_name`.
+    fn has_connection(&self, output_slot: &'static str, destination_port: &Port) -> bool {
+        self.output_destinations(output_slot)
+            .map_or(false, |destinations| {
+                destinations.contains(destination_port)
+            })
     }
 }
 
+/// Represents a single end of a node graph connection
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]
 pub struct Port {
     pub node_name: String,
     pub slot_name: &'static str,
 }
 
+/// Contains the full node graph as an intrusive digraph
 #[derive(Debug)]
 pub struct NodeGraph {
     nodes: HashMap<String, Box<dyn Node>>,
 }
 
+// TODO check for cycles
 impl NodeGraph {
+    /// Create a new node graph.
     pub fn new() -> Self {
         NodeGraph {
             nodes: HashMap::new(),
         }
     }
 
+    /// Add a node to the graph. Returns the name of the node.
+    ///
+    /// Use `connect` to add connections to the node.
     pub fn add(&mut self, node: Box<dyn Node>) -> String {
         let mut i: usize = 0;
         while self.nodes.contains_key(&format_name(node.name(), i)) {
@@ -64,6 +97,11 @@ impl NodeGraph {
         name
     }
 
+    /// Connect one node to another node.
+    ///
+    /// The input port on `to` is cleared of its connection, if it exists. The corresponding port on
+    /// the output node of the node connected to this node is also removed. The ports are then
+    /// connected.
     pub fn connect(&mut self, from: Port, to: Port) {
         // remove other outputs going to `to` (since an input slot can only have one source)
         for (_, node) in self.nodes.iter_mut() {
@@ -74,7 +112,7 @@ impl NodeGraph {
             }
         }
 
-        // and connect the output of `from`...
+        // and then connect the output of `from`...
         self.nodes
             .get_mut(&from.node_name)
             .unwrap()
@@ -139,51 +177,53 @@ impl Node for AlphaOver {
         Some(output)
     }
 
-    fn input_source(&self, slot: &'static str) -> Option<&Port> {
-        match slot {
+    fn input_source(&self, input_slot: &'static str) -> Option<&Port> {
+        match input_slot {
             Self::INPUT_A => self.input_a_source.as_ref(),
             Self::INPUT_B => self.input_b_source.as_ref(),
             _ => None,
         }
     }
 
-    fn output_destinations(&self, slot: &'static str) -> Option<&[Port]> {
-        match slot {
+    fn output_destinations(&self, output_slot: &'static str) -> Option<&[Port]> {
+        match output_slot {
             Self::OUTPUT_MIX => Some(&self.mix_destinations),
             _ => None,
         }
     }
 
-    fn connect_input(&mut self, slot: &'static str, from: Port) {
-        match slot {
-            Self::INPUT_A => self.input_a_source = Some(from),
-            Self::INPUT_B => self.input_b_source = Some(from),
+    fn connect_input(&mut self, input_slot: &'static str, source_port: Port) {
+        match input_slot {
+            Self::INPUT_A => self.input_a_source = Some(source_port),
+            Self::INPUT_B => self.input_b_source = Some(source_port),
             _ => panic!(
                 "cannot connect: no input slot on {} named {}",
                 self.name(),
-                slot
+                input_slot
             ),
         }
     }
 
-    fn connect_output(&mut self, slot: &'static str, to: Port) {
-        match slot {
-            Self::OUTPUT_MIX => self.mix_destinations.push(to),
+    fn connect_output(&mut self, output_slot: &'static str, destination_port: Port) {
+        match output_slot {
+            Self::OUTPUT_MIX => self.mix_destinations.push(destination_port),
             _ => panic!(
                 "cannot connect: no output slot on {} named {}",
                 self.name(),
-                slot
+                output_slot
             ),
         }
     }
 
-    fn remove_output(&mut self, slot: &'static str, to: &Port) {
-        match slot {
-            Self::OUTPUT_MIX => self.mix_destinations.retain(|port| port != to),
+    fn remove_output(&mut self, output_slot: &'static str, destination_port: &Port) {
+        match output_slot {
+            Self::OUTPUT_MIX => self
+                .mix_destinations
+                .retain(|port| port != destination_port),
             _ => panic!(
                 "cannot remove: no output slot on {} named {}",
                 self.name(),
-                slot
+                output_slot
             ),
         }
     }
