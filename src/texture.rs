@@ -1,6 +1,6 @@
 use crate::{Context, Result};
 
-use image::{DynamicImage, GenericImageView, RgbaImage};
+use image_library::{DynamicImage, GenericImageView, RgbaImage};
 
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
@@ -30,7 +30,8 @@ impl MyTexture {
         bytes: &[u8],
         label: &str,
     ) -> Result<(MyTexture, RgbaImage)> {
-        let img = image::load_from_memory(bytes).context("Couldn't load image from memory")?;
+        let img =
+            image_library::load_from_memory(bytes).context("Couldn't load image from memory")?;
         Self::from_image(device, queue, &img, label)
     }
 
@@ -44,7 +45,8 @@ impl MyTexture {
             .flat_map(|(r, g, b, a)| once(r).chain(once(g)).chain(once(b)).chain(once(a)))
             .collect::<Vec<u8>>();
 
-        let image: RgbaImage = image::ImageBuffer::from_vec(width, height, data.clone()).unwrap();
+        let image: RgbaImage =
+            image_library::ImageBuffer::from_vec(width, height, data.clone()).unwrap();
 
         Self::from_image(
             device,
@@ -168,7 +170,7 @@ impl MyTexture {
     ) -> Result<(MyTexture, RgbaImage)> {
         let path_copy = path.as_ref().to_path_buf();
         let label = path_copy.to_str().unwrap();
-        let image = image::open(path).context("Couldn't find image")?;
+        let image = image_library::open(path).context("Couldn't find image")?;
         Self::from_image(device, queue, &image, label)
     }
 }

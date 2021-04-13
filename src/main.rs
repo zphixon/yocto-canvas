@@ -4,8 +4,6 @@ use bytemuck::{Pod, Zeroable};
 
 use cgmath::{Matrix4, SquareMatrix};
 
-use image::RgbaImage;
-
 use texture::MyTexture;
 
 use winit::{
@@ -15,6 +13,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+use crate::image::{Image, Pixel};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BackendBit, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
@@ -28,6 +27,8 @@ use wgpu::{
     TextureUsage, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
 };
 
+mod composite;
+mod image;
 mod texture;
 
 #[rustfmt::skip]
@@ -132,9 +133,8 @@ struct State {
     size: PhysicalSize<u32>,
     pipeline: RenderPipeline,
     texture: MyTexture,
-    image: RgbaImage,
+    image: Image,
     vertex_buffer: Buffer,
-    // 😠 https://github.com/rust-windowing/winit/issues/883
     mouse: Mouse,
     zoom: f32,
     updated_uniforms: bool,
@@ -178,9 +178,10 @@ impl State {
 
         let swapchain = device.create_swap_chain(&surface, &sc_desc);
 
-        //let (texture, image) = MyTexture::empty(&device, &queue, "image")?;
-        let (texture, image) = MyTexture::load(&device, &queue, "4751549.png")?;
+        let (texture, image) = MyTexture::load(&device, &queue, "res/4751549.png")?;
         //let (texture, image) = MyTexture::load(&device, &queue, "happy-tree.bdff8a19.png")?;
+
+        let image = Image::from(image);
 
         let updated_uniforms = false;
 
@@ -330,13 +331,27 @@ impl State {
 
     fn update(&mut self) {
         if self.mouse.left == ElementState::Pressed {
-            self.image.as_mut()[4] = 0xff;
-            self.image.as_mut()[5] = 0xff;
-            self.image.as_mut()[6] = 0xff;
+            self.image.set_pixel(
+                40,
+                20,
+                Pixel {
+                    r: 1.0,
+                    g: 1.0,
+                    b: 1.0,
+                    a: 1.0,
+                },
+            );
         } else {
-            self.image.as_mut()[4] = 0xff;
-            self.image.as_mut()[5] = 0x00;
-            self.image.as_mut()[6] = 0x00;
+            self.image.set_pixel(
+                40,
+                20,
+                Pixel {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
+            );
         }
 
         if !self.updated_uniforms {
@@ -386,7 +401,7 @@ impl State {
                 mip_level: 0,
                 origin: Origin3d::ZERO,
             },
-            self.image.as_raw(),
+            &self.image.as_raw(),
             self.texture.layout.clone(),
             self.texture.size.clone(),
         );
