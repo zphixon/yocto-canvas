@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::image::ImageData;
 
 use std::{collections::HashMap, fmt::Debug};
