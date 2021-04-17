@@ -14,8 +14,7 @@ mod composite;
 mod image;
 mod texture;
 
-use crate::backend_wgpu::WgpuBackend;
-use crate::image::Pixel;
+use crate::{backend_wgpu::WgpuBackend, image::Pixel};
 
 #[derive(Debug)]
 struct Mouse {
@@ -30,6 +29,7 @@ struct State {
     size: PhysicalSize<u32>,
     mouse: Mouse,
     zoom: f32,
+    // *perhaps* eventually have my own cpu backend? not sure
     wgpu_backend: Option<WgpuBackend>,
     cpu_backend: Option<()>,
 }
@@ -89,6 +89,7 @@ impl State {
     }
 
     fn update(&mut self) {
+        // backend-agnostic stuff that's done slightly differently goes here
         if let Some(wgpu_backend) = &mut self.wgpu_backend {
             if self.mouse.left == ElementState::Pressed {
                 wgpu_backend.canvas_pipeline.canvas_image.set_pixel(
@@ -114,6 +115,7 @@ impl State {
                 );
             }
 
+            // and backend-specific stuff goes in these methods
             wgpu_backend.update(&self.size, self.zoom);
         }
     }

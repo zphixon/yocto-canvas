@@ -1,9 +1,5 @@
-use super::{Uniform, Vertex, VERTICES};
-use crate::image::Image;
-use crate::texture::MyTexture;
-use crate::Result;
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
+    util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, BlendState, Buffer, BufferBindingType, BufferUsage,
     ColorTargetState, ColorWrite, CommandEncoder, CullMode, Device, FragmentState, FrontFace,
@@ -12,6 +8,10 @@ use wgpu::{
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderStage,
     SwapChainDescriptor, SwapChainTexture, TextureCopyView, VertexState,
 };
+
+use super::{Uniform, Vertex, VERTICES};
+
+use crate::{image::Image, texture::MyTexture, Result};
 
 pub struct CanvasPipeline {
     pub canvas_pipeline: RenderPipeline,

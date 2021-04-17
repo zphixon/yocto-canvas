@@ -1,17 +1,20 @@
 use bytemuck::{Pod, Zeroable};
+
 use cgmath::Matrix4;
+
 use wgpu::{
     BackendBit, BufferAddress, CommandEncoderDescriptor, Device, DeviceDescriptor, Features,
     InputStepMode, Instance, PresentMode, Queue, RequestAdapterOptions, Surface, SwapChain,
     SwapChainDescriptor, TextureUsage, VertexAttribute, VertexBufferLayout, VertexFormat,
 };
 
-pub mod canvas;
+use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{Context, Result};
+
+pub mod canvas;
+
 use canvas::CanvasPipeline;
-use winit::dpi::PhysicalSize;
-use winit::window::Window;
 
 pub struct WgpuBackend {
     pub surface: Surface,
@@ -72,6 +75,7 @@ impl WgpuBackend {
         })
     }
 
+    // TODO maybe write a trait eventually?
     pub fn update(&mut self, size: &PhysicalSize<u32>, zoom: f32) {
         if !self.updated_uniforms {
             let uniform = Uniform {
