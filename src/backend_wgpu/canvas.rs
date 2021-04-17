@@ -1,7 +1,7 @@
+use super::{Uniform, Vertex, VERTICES};
 use crate::image::Image;
 use crate::texture::MyTexture;
 use crate::Result;
-use crate::{Uniform, Vertex, VERTICES};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
