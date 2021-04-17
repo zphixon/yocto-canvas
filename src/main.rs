@@ -133,15 +133,15 @@ struct State {
     swapchain: SwapChain,
     sc_desc: SwapChainDescriptor,
     size: PhysicalSize<u32>,
-    pipeline: RenderPipeline,
-    texture: MyTexture,
-    image: Image,
-    vertex_buffer: Buffer,
+    canvas_pipeline: RenderPipeline,
+    canvas_texture: MyTexture,
+    canvas_image: Image,
+    quad_vertex_buffer: Buffer,
     mouse: Mouse,
     zoom: f32,
     updated_uniforms: bool,
-    uniform_buffer: Buffer,
-    uniform_bind_group: BindGroup,
+    canvas_uniform_buffer: Buffer,
+    canvas_uniform_bind_group: BindGroup,
 }
 
 impl State {
@@ -180,14 +180,14 @@ impl State {
 
         let swapchain = device.create_swap_chain(&surface, &sc_desc);
 
-        let (texture, image) = MyTexture::load(&device, &queue, "res/4751549.png")?;
+        let (canvas_texture, image) = MyTexture::load(&device, &queue, "res/4751549.png")?;
         //let (texture, image) = MyTexture::load(&device, &queue, "happy-tree.bdff8a19.png")?;
 
-        let image = Image::from(image);
+        let canvas_image = Image::from(image);
 
         let updated_uniforms = false;
 
-        let uniform = Uniform {
+        let initial_uniform = Uniform {
             scale_x: 1.0,
             scale_y: 1.0,
             xform_x: 1.0,
@@ -195,13 +195,13 @@ impl State {
             zoom: 1.0f32,
         };
 
-        let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        let canvas_uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("uniform"),
-            contents: bytemuck::cast_slice(&[uniform]),
+            contents: bytemuck::cast_slice(&[initial_uniform]),
             usage: BufferUsage::UNIFORM | BufferUsage::COPY_DST,
         });
 
-        let uniform_bind_group_layout =
+        let canvas_uniform_bind_group_layout =
             device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some("uniform bgl"),
                 entries: &[BindGroupLayoutEntry {
@@ -216,18 +216,21 @@ impl State {
                 }],
             });
 
-        let uniform_bind_group = device.create_bind_group(&BindGroupDescriptor {
+        let canvas_uniform_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("uniform b group"),
-            layout: &uniform_bind_group_layout,
+            layout: &canvas_uniform_bind_group_layout,
             entries: &[BindGroupEntry {
                 binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
+                resource: canvas_uniform_buffer.as_entire_binding(),
             }],
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+        let canvas_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("pipeline layout"),
-            bind_group_layouts: &[&texture.group_layout, &uniform_bind_group_layout],
+            bind_group_layouts: &[
+                &canvas_texture.group_layout,
+                &canvas_uniform_bind_group_layout,
+            ],
             push_constant_ranges: &[],
         });
 
@@ -236,9 +239,9 @@ impl State {
         let fs_module =
             device.create_shader_module(&wgpu::include_spirv!("../shaders/shader.frag.spv"));
 
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+        let canvas_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(&canvas_pipeline_layout),
             vertex: VertexState {
                 module: &vs_module,
                 entry_point: "main",
@@ -269,7 +272,7 @@ impl State {
             }),
         });
 
-        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        let quad_vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("vertex buffer"),
             contents: bytemuck::cast_slice(&VERTICES),
             usage: BufferUsage::VERTEX,
@@ -291,15 +294,15 @@ impl State {
             swapchain,
             sc_desc,
             size,
-            pipeline,
-            texture,
-            image,
-            vertex_buffer,
+            canvas_pipeline,
+            canvas_texture,
+            canvas_image,
+            quad_vertex_buffer,
             mouse,
             zoom,
             updated_uniforms,
-            uniform_buffer,
-            uniform_bind_group,
+            canvas_uniform_buffer,
+            canvas_uniform_bind_group,
         })
     }
 
@@ -335,7 +338,7 @@ impl State {
 
     fn update(&mut self) {
         if self.mouse.left == ElementState::Pressed {
-            self.image.set_pixel(
+            self.canvas_image.set_pixel(
                 40,
                 20,
                 Pixel {
@@ -346,7 +349,7 @@ impl State {
                 },
             );
         } else {
-            self.image.set_pixel(
+            self.canvas_image.set_pixel(
                 40,
                 20,
                 Pixel {
@@ -360,15 +363,18 @@ impl State {
 
         if !self.updated_uniforms {
             let uniform = Uniform {
-                scale_x: self.image.width() as f32 / self.size.width as f32,
-                scale_y: self.image.height() as f32 / self.size.height as f32,
+                scale_x: self.canvas_image.width() as f32 / self.size.width as f32,
+                scale_y: self.canvas_image.height() as f32 / self.size.height as f32,
                 xform_x: 0.0,
                 xform_y: 0.0,
                 zoom: self.zoom,
             };
 
-            self.queue
-                .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform]));
+            self.queue.write_buffer(
+                &self.canvas_uniform_buffer,
+                0,
+                bytemuck::cast_slice(&[uniform]),
+            );
             self.updated_uniforms = true;
         }
     }
@@ -390,13 +396,13 @@ impl State {
 
         self.queue.write_texture(
             TextureCopyView {
-                texture: &self.texture.texture,
+                texture: &self.canvas_texture.texture,
                 mip_level: 0,
                 origin: Origin3d::ZERO,
             },
-            &self.image.as_raw(),
-            self.texture.layout.clone(),
-            self.texture.size.clone(),
+            &self.canvas_image.as_raw(),
+            self.canvas_texture.layout.clone(),
+            self.canvas_texture.size.clone(),
         );
 
         {
@@ -427,12 +433,12 @@ impl State {
                 1.,
             );
 
-            rp.set_pipeline(&self.pipeline);
+            rp.set_pipeline(&self.canvas_pipeline);
 
-            rp.set_bind_group(0, &self.texture.group, &[]);
-            rp.set_bind_group(1, &self.uniform_bind_group, &[]);
+            rp.set_bind_group(0, &self.canvas_texture.group, &[]);
+            rp.set_bind_group(1, &self.canvas_uniform_bind_group, &[]);
 
-            rp.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            rp.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
 
             let len = VERTICES.len() as u32;
             rp.draw(0..len, 0..1);
