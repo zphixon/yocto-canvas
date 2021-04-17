@@ -110,8 +110,10 @@ impl Vertex {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 struct Uniform {
-    model: [[f32; 4]; 4],
-    view: [[f32; 4]; 4],
+    scale_x: f32,
+    scale_y: f32,
+    xform_x: f32,
+    xform_y: f32,
     zoom: f32,
 }
 
@@ -186,8 +188,10 @@ impl State {
         let updated_uniforms = false;
 
         let uniform = Uniform {
-            model: Matrix4::identity().into(),
-            view: Matrix4::identity().into(),
+            scale_x: 1.0,
+            scale_y: 1.0,
+            xform_x: 1.0,
+            xform_y: 1.0,
             zoom: 1.0f32,
         };
 
@@ -355,22 +359,11 @@ impl State {
         }
 
         if !self.updated_uniforms {
-            // TODO i've decided it's unnecessary
-            // I will replace with simple float uniforms to represent x/y scaling and just do it the sane way
-            let view = (Matrix4::identity()).into();
-            #[rustfmt::skip]
-            let model = (OPENGL_TO_WGPU_MATRIX *
-                Matrix4::new(
-                    self.image.width() as f32 / self.size.width as f32, 0., 0., 0.,
-                    0., self.image.height() as f32 / self.size.height as f32, 0., 0.,
-                    0., 0., 1., 0.,
-                    0., 0., 0., 1.,
-                ))
-                .into();
-
             let uniform = Uniform {
-                model,
-                view,
+                scale_x: self.image.width() as f32 / self.size.width as f32,
+                scale_y: self.image.height() as f32 / self.size.height as f32,
+                xform_x: 0.0,
+                xform_y: 0.0,
                 zoom: self.zoom,
             };
 
