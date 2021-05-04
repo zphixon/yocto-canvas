@@ -507,6 +507,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "fontdue"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7872084ec11cf1ff61c005223ff439110bb2d88e7f2dd348ac1f79907d57b0f"
+dependencies = [
+ "hashbrown",
+ "ttf-parser 0.12.0",
+]
+
+[[package]]
 name = "foreign-types"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1364,7 +1374,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f923fb806c46266c02ab4a5b239735c144bdeda724a50ed058e5226f594cde3"
 dependencies = [
- "ttf-parser",
+ "ttf-parser 0.6.2",
 ]
 
 [[package]]
@@ -1764,6 +1774,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e5d7cd7ab3e47dda6e56542f4bbf3824c15234958c6e1bd6aaa347e93499fdc"
 
 [[package]]
+name = "ttf-parser"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85e00391c1f3d171490a3f8bd79999b0002ae38d3da0d6a3a306c754b053d71b"
+
+[[package]]
 name = "unicode-xid"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2134,6 +2150,7 @@ dependencies = [
  "bytemuck",
  "cgmath",
  "env_logger",
+ "fontdue",
  "futures",
  "image",
  "log",
